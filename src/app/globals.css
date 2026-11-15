@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #080910;
+  --surface: #111321;
+  --secondary: #191B2D;
+  --border: #232742;
+}
+
+body {
+  background-color: var(--background);
+  color: #F3F4F6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Cinematic Dark Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080910;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #232742;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8B5CF6;
+}
+
+/* Selection Color */
+::selection {
+  background-color: #8B5CF6;
+  color: #FFFFFF;
+}
