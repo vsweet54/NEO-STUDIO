@@ -4,6 +4,7 @@ import { NvidiaAdapter } from '@/lib/providers/nvidia';
 import { CloudflareAdapter } from '@/lib/providers/cloudflare';
 import { GroqAdapter } from '@/lib/providers/groq';
 import { OllamaAdapter } from '@/lib/providers/ollama';
+import { OpenRouterAdapter } from '@/lib/providers/openrouter';
 import { KeyPool } from '@/lib/providers/key-pool';
 
 export async function POST(req: NextRequest) {
@@ -26,6 +27,19 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case 'openrouter': {
+        const keys = KeyPool.getKeys(apiKey, ['OPENROUTER_API_KEY', 'OPENROUTER_API_KEYS']);
+        if (keys.length === 0) {
+          return NextResponse.json({ success: false, message: 'OpenRouter API key is missing' }, { status: 400 });
+        }
+        const endpoint = baseUrl || process.env.OPENROUTER_BASE_URL;
+        result = await OpenRouterAdapter.testConnection(keys[0], endpoint);
+        if (result.success && keys.length > 1) {
+          result.message += ` [Multi-Key Active: ${keys.length} API Keys terdeteksi dengan auto-rotation]`;
+        }
+        break;
+      }
+
       case 'nvidia': {
         const keys = KeyPool.getKeys(apiKey, ['NVIDIA_API_KEY', 'NVIDIA_API_KEYS']);
         if (keys.length === 0) {
@@ -40,17 +54,16 @@ export async function POST(req: NextRequest) {
       }
 
       case 'cloudflare': {
-        const keys = KeyPool.getKeys(apiKey, ['CLOUDFLARE_API_KEY', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_API_KEYS']);
-        const acctId = accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
-        if (keys.length === 0 || !acctId) {
+        const pairs = KeyPool.getCloudflarePairs(apiKey, accountId);
+        if (pairs.length === 0) {
           return NextResponse.json(
             { success: false, message: 'Cloudflare API Token dan Account ID wajib diisi.' },
             { status: 400 }
           );
         }
-        result = await CloudflareAdapter.testConnection(keys[0], acctId);
-        if (result.success && keys.length > 1) {
-          result.message += ` [Multi-Key Active: ${keys.length} API Keys terdeteksi dengan auto-rotation]`;
+        result = await CloudflareAdapter.testConnection(pairs[0].apiKey, pairs[0].accountId);
+        if (result.success && pairs.length > 1) {
+          result.message += ` [Multi-Key Active: ${pairs.length} Cloudflare (Key, Account ID) pairs terdeteksi dengan auto-rotation urut]`;
         }
         break;
       }

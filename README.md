@@ -57,10 +57,20 @@
 | Provider | Endpoint / Tipe | Tugas Utama | Model Unggulan |
 | :--- | :--- | :--- | :--- |
 | **Google Gemini API** | Cloud Native | Story, Script, Breakdown, Imagen 3, Veo 2 | `gemini-2.0-flash`, `gemini-1.5-pro`, `imagen-3.0-generate-002`, `veo-2.0-generate-001` |
+| **OpenRouter API** | Unified Gateway | Multi-Model LLM Routing (DeepSeek, Claude, Llama) | `deepseek/deepseek-r1`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct`, `google/gemini-2.0-flash-001` |
 | **NVIDIA NIM API** | Enterprise Cloud | Deep Reasoning & Story Planning | `meta/llama-3.1-70b-instruct`, `deepseek-ai/deepseek-r1` |
 | **Cloudflare Workers AI** | Serverless Edge | Edge Text, FLUX.1 Image, Aura TTS | `@cf/meta/llama-3.1-8b-instruct`, `@cf/black-forest-labs/flux-1-schnell`, `@cf/deepgram/aura-tts` |
 | **Groq API** | Ultra-Fast LPU | High-Speed Dialogue, Script, STT | `llama-3.3-70b-versatile`, `whisper-large-v3` |
 | **Ollama API** | Local & Remote Host | Offline Inference / Cloud Proxy | `llama3.2`, `qwen2.5`, `mistral` |
+
+> [!TIP]
+> **Multi-API Key Pool & Cloudflare Paired Rotation:**  
+> - Semua provider mendukung multi-key dengan pemisah koma: `key1, key2, key3`.  
+> - Khusus **Cloudflare Workers AI**, API Key dan Account ID dipasangkan secara urut:  
+>   `CLOUDFLARE_API_KEY="token_1, token_2, token_3"`  
+>   `CLOUDFLARE_ACCOUNT_ID="idakun1, idakun2, idakun3"`  
+>   (key 1 menggunakan idakun 1, key 2 menggunakan idakun 2, dst. Jika salah satu terkena limit 429, otomatis failover ke pasangan berikutnya).
+> - **OpenRouter API** mendukung multi-key pool (`sk-or-v1-key1, sk-or-v1-key2`) dengan rotasi otomatis saat 429.
 
 > [!IMPORTANT]
 > **Panduan Endpoint Ollama (Lokal & Remote Server dengan API Key):**  

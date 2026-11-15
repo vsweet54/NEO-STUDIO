@@ -4,6 +4,7 @@ import { NvidiaAdapter } from '@/lib/providers/nvidia';
 import { CloudflareAdapter } from '@/lib/providers/cloudflare';
 import { GroqAdapter } from '@/lib/providers/groq';
 import { OllamaAdapter } from '@/lib/providers/ollama';
+import { OpenRouterAdapter } from '@/lib/providers/openrouter';
 import { KeyPool } from '@/lib/providers/key-pool';
 
 export async function POST(req: NextRequest) {
@@ -56,16 +57,15 @@ export async function POST(req: NextRequest) {
       }
 
       case 'cloudflare': {
-        const keys = KeyPool.getKeys(apiKey, ['CLOUDFLARE_API_KEY', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_API_KEYS']);
-        const acctId = accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
-        if (!acctId) {
+        const pairs = KeyPool.getCloudflarePairs(apiKey, accountId);
+        if (pairs.length === 0) {
           return NextResponse.json(
-            { success: false, error: 'Cloudflare Account ID is required (set in settings or CLOUDFLARE_ACCOUNT_ID env)' },
+            { success: false, error: 'Cloudflare API Key dan Account ID wajib diisi. Masukkan key1, key2... dan idakun1, idakun2...' },
             { status: 400 }
           );
         }
-        result = await KeyPool.executeWithRotation('cloudflare', keys, (activeKey) =>
-          CloudflareAdapter.generateText(activeKey, acctId, options)
+        result = await KeyPool.executeCloudflareWithRotation(pairs, (activeKey, activeAcct) =>
+          CloudflareAdapter.generateText(activeKey, activeAcct, options)
         );
         break;
       }
@@ -75,6 +75,15 @@ export async function POST(req: NextRequest) {
         const endpoint = baseUrl || process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
         result = await KeyPool.executeWithRotation('groq', keys, (activeKey) =>
           GroqAdapter.generateText(activeKey, options, endpoint)
+        );
+        break;
+      }
+
+      case 'openrouter': {
+        const keys = KeyPool.getKeys(apiKey, ['OPENROUTER_API_KEY', 'OPENROUTER_API_KEYS']);
+        const endpoint = baseUrl || process.env.OPENROUTER_BASE_URL;
+        result = await KeyPool.executeWithRotation('openrouter', keys, (activeKey) =>
+          OpenRouterAdapter.generateText(activeKey, options, endpoint)
         );
         break;
       }

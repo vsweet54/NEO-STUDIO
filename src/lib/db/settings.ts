@@ -44,6 +44,13 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     baseUrl: 'http://localhost:11434',
     defaultTextModel: 'llama3.2',
   },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter API',
+    enabled: true,
+    status: 'unconfigured',
+    defaultTextModel: 'deepseek/deepseek-r1',
+  },
 ];
 
 const DEFAULT_ROUTER: RouterConfig = {

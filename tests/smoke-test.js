@@ -68,6 +68,7 @@ async function runTests() {
     // Check individual providers represented
     const providersFound = new Set(modelsJson.models.map((m) => m.providerId));
     assert(providersFound.has('gemini'), 'Gemini models registered');
+    assert(providersFound.has('openrouter'), 'OpenRouter models registered');
     assert(providersFound.has('nvidia'), 'NVIDIA NIM models registered');
     assert(providersFound.has('cloudflare'), 'Cloudflare models registered');
     assert(providersFound.has('groq'), 'Groq models registered');
@@ -79,6 +80,12 @@ async function runTests() {
       apiKey: '',
     });
     assert(testProv.status === 400, 'POST /api/providers/test validates missing key with 400');
+
+    const testOpenRouter = await post('http://127.0.0.1:3000/api/providers/test', {
+      providerId: 'openrouter',
+      apiKey: '',
+    });
+    assert(testOpenRouter.status === 400, 'POST /api/providers/test validates missing openrouter key with 400');
 
     // 4. Text Generation Validation
     const testTextVal = await post('http://127.0.0.1:3000/api/generate/text', {});

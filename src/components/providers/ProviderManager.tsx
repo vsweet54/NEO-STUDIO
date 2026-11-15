@@ -146,7 +146,7 @@ export const ProviderManager: React.FC = () => {
             AI Provider Manager
           </h1>
           <p className="text-xs text-gray-400 mt-1">
-            Konfigurasi 5 ekosistem AI terintegrasi (Google Gemini, NVIDIA NIM, Cloudflare Workers AI, Groq, dan Ollama).
+            Konfigurasi ekosistem AI multi-provider terintegrasi (Google Gemini, OpenRouter, NVIDIA NIM, Cloudflare Workers AI, Groq, dan Ollama).
           </p>
         </div>
 
@@ -218,6 +218,7 @@ export const ProviderManager: React.FC = () => {
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {prov.id === 'gemini' && 'Story, Script, Characters, Imagen 3, Google Veo'}
+                      {prov.id === 'openrouter' && 'Unified Multi-Model Gateway (DeepSeek R1, Claude 3.5, Llama 3.3, Gemini 2.0)'}
                       {prov.id === 'nvidia' && 'Enterprise Deep Reasoning, Mixtral, Llama 3.1 70B'}
                       {prov.id === 'cloudflare' && 'Serverless Edge AI, FLUX.1 Schnell, Aura TTS'}
                       {prov.id === 'groq' && 'Ultra-Fast LPU Inference >300 tps, Dialogue, Whisper'}
@@ -268,25 +269,43 @@ export const ProviderManager: React.FC = () => {
                     type="password"
                     value={edit.apiKey}
                     onChange={(e) => handleFieldChange(prov.id, 'apiKey', e.target.value)}
-                    placeholder="key1, key2, key3 (rotasi otomatis bila 429)..."
+                    placeholder={
+                      prov.id === 'openrouter'
+                        ? 'sk-or-v1-key1, sk-or-v1-key2...'
+                        : 'key1, key2, key3 (rotasi otomatis bila 429)...'
+                    }
                   />
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Gunakan koma (,) untuk memasukkan beberapa key. Sistem otomatis melakukan rotasi anti-limit.
+                    Gunakan koma (,) untuk multi-key pool. Sistem otomatis rotasi saat terkena rate-limit.
                   </p>
                 </div>
 
                 {prov.id === 'cloudflare' && (
-                  <Input
-                    label="Cloudflare Account ID"
-                    value={edit.accountId || ''}
-                    onChange={(e) => handleFieldChange(prov.id, 'accountId', e.target.value)}
-                    placeholder="Contoh: a1b2c3d4..."
-                  />
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-300">
+                        Cloudflare Account ID (Multi-Account Pool)
+                      </label>
+                      {edit.accountId && edit.accountId.includes(',') && (
+                        <span className="text-[10px] text-accent-cyan font-mono font-semibold">
+                          {edit.accountId.split(',').filter((k) => k.trim().length > 0).length} IDs Terdeteksi
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      value={edit.accountId || ''}
+                      onChange={(e) => handleFieldChange(prov.id, 'accountId', e.target.value)}
+                      placeholder="idakun1, idakun2, idakun3..."
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Dipasangkan urut dengan API Key: (key 1 ↔ idakun 1, key 2 ↔ idakun 2, dst).
+                    </p>
+                  </div>
                 )}
 
-                {(prov.id === 'ollama' || prov.id === 'nvidia' || prov.id === 'groq') && (
+                {(prov.id === 'ollama' || prov.id === 'nvidia' || prov.id === 'groq' || prov.id === 'openrouter') && (
                   <Input
-                    label="Base URL Endpoint"
+                    label="Base URL Endpoint (Opsional)"
                     value={edit.baseUrl || ''}
                     onChange={(e) => handleFieldChange(prov.id, 'baseUrl', e.target.value)}
                     placeholder={
@@ -294,6 +313,8 @@ export const ProviderManager: React.FC = () => {
                         ? 'http://localhost:11434'
                         : prov.id === 'nvidia'
                         ? 'https://integrate.api.nvidia.com/v1'
+                        : prov.id === 'openrouter'
+                        ? 'https://openrouter.ai/api/v1'
                         : 'https://api.groq.com/openai/v1'
                     }
                   />

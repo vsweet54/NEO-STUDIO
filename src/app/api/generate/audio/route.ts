@@ -23,16 +23,15 @@ export async function POST(req: NextRequest) {
 
     switch (providerId) {
       case 'cloudflare': {
-        const keys = KeyPool.getKeys(apiKey, ['CLOUDFLARE_API_KEY', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_API_KEYS']);
-        const acctId = accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
-        if (!acctId) {
+        const pairs = KeyPool.getCloudflarePairs(apiKey, accountId);
+        if (pairs.length === 0) {
           return NextResponse.json(
-            { success: false, error: 'Cloudflare Account ID is required (set in settings or CLOUDFLARE_ACCOUNT_ID env)' },
+            { success: false, error: 'Cloudflare API Key and Account ID are required (set in settings or env)' },
             { status: 400 }
           );
         }
-        result = await KeyPool.executeWithRotation('cloudflare', keys, (activeKey) =>
-          CloudflareAdapter.generateAudio(activeKey, acctId, options)
+        result = await KeyPool.executeCloudflareWithRotation(pairs, (activeKey, activeAcct) =>
+          CloudflareAdapter.generateAudio(activeKey, activeAcct, options)
         );
         break;
       }

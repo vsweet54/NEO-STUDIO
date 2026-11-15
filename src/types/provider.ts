@@ -1,4 +1,4 @@
-export type ProviderId = 'gemini' | 'nvidia' | 'cloudflare' | 'groq' | 'ollama' | string;
+export type ProviderId = 'gemini' | 'nvidia' | 'cloudflare' | 'groq' | 'ollama' | 'openrouter' | string;
 
 export type ModalityType = 'text' | 'image' | 'video' | 'audio' | 'vision';
 
