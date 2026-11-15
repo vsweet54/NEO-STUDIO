@@ -63,7 +63,8 @@ class JobQueueManager {
         ? 'audio'
         : 'text';
 
-    const route = AIRouter.resolveRoute(params.taskType, routerConfig, providerConfigs);
+    const preferredModel = params.params?.model;
+    const route = AIRouter.resolveRoute(params.taskType, routerConfig, providerConfigs, [], preferredModel);
 
     const jobId = 'job_' + Math.random().toString(36).substring(2, 9) + Date.now();
     const job: GenerationJob = {
@@ -121,6 +122,8 @@ class JobQueueManager {
         job.progress = 40;
         this.notify();
 
+        const { model: _ignored, ...otherParams } = job.params || {};
+
         let apiEndpoint = '/api/generate/text';
         let payload: any = {
           providerId: currentRoute.providerId,
@@ -129,7 +132,7 @@ class JobQueueManager {
           apiKey: prov.apiKey,
           baseUrl: prov.baseUrl,
           accountId: prov.accountId,
-          ...job.params,
+          ...otherParams,
         };
 
         if (job.modality === 'image') {

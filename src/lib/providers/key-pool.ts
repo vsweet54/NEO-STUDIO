@@ -106,6 +106,34 @@ export class KeyPool {
           pairIndex + 1,
           activePool.length
         );
+
+        if (result && typeof result === 'object' && 'success' in result && !(result as any).success) {
+          const resErr = String((result as any).error || '');
+          const isLimit =
+            resErr.includes('429') ||
+            resErr.includes('rate limit') ||
+            resErr.includes('quota') ||
+            resErr.includes('Too Many Requests');
+          const isAuth =
+            resErr.includes('401') ||
+            resErr.includes('Unauthorized') ||
+            resErr.includes('Invalid token') ||
+            resErr.includes('invalid') ||
+            resErr.includes('API key not valid');
+
+          if (isLimit || isAuth) {
+            console.warn(
+              `[KeyPool Cloudflare] Pair #${pairIndex + 1}/${activePool.length} error: ${resErr}. Rotating to next pair...`
+            );
+            if (isLimit) {
+              this.rateLimitedKeys.set(current.apiKey, Date.now() + 60000);
+              this.rateLimitedKeys.set(current.accountId, Date.now() + 60000);
+            }
+            lastError = new Error(resErr);
+            continue;
+          }
+        }
+
         this.providerIndices['cloudflare'] = (pairIndex + 1) % activePool.length;
         return result;
       } catch (err: any) {
@@ -168,6 +196,34 @@ export class KeyPool {
 
       try {
         const result = await operation(apiKey, keyIndex + 1, activePool.length);
+
+        if (result && typeof result === 'object' && 'success' in result && !(result as any).success) {
+          const resErr = String((result as any).error || '');
+          const isRateLimit =
+            resErr.includes('429') ||
+            resErr.includes('RESOURCE_EXHAUSTED') ||
+            resErr.includes('rate limit') ||
+            resErr.includes('quota') ||
+            resErr.includes('Too Many Requests');
+          const isAuth =
+            resErr.includes('API_KEY_INVALID') ||
+            resErr.includes('API key not valid') ||
+            resErr.includes('Unauthorized') ||
+            resErr.includes('401') ||
+            resErr.includes('not valid');
+
+          if (isRateLimit || isAuth) {
+            console.warn(
+              `[KeyPool ${providerId}] Key #${keyIndex + 1}/${activePool.length} returned error: ${resErr}. Rotating to next key...`
+            );
+            if (isRateLimit) {
+              this.rateLimitedKeys.set(apiKey, Date.now() + 60000);
+            }
+            lastError = new Error(resErr);
+            continue;
+          }
+        }
+
         this.providerIndices[providerId] = (keyIndex + 1) % activePool.length;
         return result;
       } catch (err: any) {

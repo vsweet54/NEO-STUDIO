@@ -9,7 +9,10 @@ import {
 export class CloudflareAdapter {
   static async testConnection(apiKey: string, accountId?: string): Promise<ProviderConnectionTestResult> {
     const start = Date.now();
-    if (!accountId) {
+    const cleanAccountId = (accountId || '').split(',')[0].trim();
+    const cleanApiKey = (apiKey || '').split(',')[0].trim();
+
+    if (!cleanAccountId) {
       return {
         success: false,
         message: 'Cloudflare Account ID wajib diisi di pengaturan provider.',
@@ -22,11 +25,11 @@ export class CloudflareAdapter {
       // Test running a lightweight prompt on Llama 3.1 8b
       const testModel = '@cf/meta/llama-3.1-8b-instruct';
       const res = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${testModel}`,
+        `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${testModel}`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${cleanApiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ prompt: 'Ping', max_tokens: 5 }),
@@ -68,7 +71,11 @@ export class CloudflareAdapter {
     options: TextGenerationOptions
   ): Promise<ProviderExecutionResult<{ text: string }>> {
     const start = Date.now();
-    const model = options.model || '@cf/meta/llama-3.1-8b-instruct';
+    const cleanAccountId = (accountId || '').split(',')[0].trim();
+    const cleanApiKey = (apiKey || '').split(',')[0].trim();
+    const model = (options.model && options.model.startsWith('@cf/'))
+      ? options.model
+      : '@cf/meta/llama-3.1-8b-instruct';
 
     try {
       const messages = [];
@@ -78,11 +85,11 @@ export class CloudflareAdapter {
       messages.push({ role: 'user', content: options.prompt });
 
       const res = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+        `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${model}`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${cleanApiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ messages, max_tokens: options.maxTokens ?? 2048 }),
@@ -125,7 +132,11 @@ export class CloudflareAdapter {
     options: ImageGenerationOptions
   ): Promise<ProviderExecutionResult<{ imageBase64: string; mimeType: string }>> {
     const start = Date.now();
-    const model = options.model || '@cf/black-forest-labs/flux-1-schnell';
+    const cleanAccountId = (accountId || '').split(',')[0].trim();
+    const cleanApiKey = (apiKey || '').split(',')[0].trim();
+    const model = (options.model && options.model.startsWith('@cf/'))
+      ? options.model
+      : '@cf/black-forest-labs/flux-1-schnell';
 
     try {
       // Map dimensions according to aspect ratio
@@ -150,11 +161,11 @@ export class CloudflareAdapter {
       };
 
       const res = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+        `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${model}`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${cleanApiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(payload),
@@ -220,15 +231,19 @@ export class CloudflareAdapter {
     options: AudioGenerationOptions
   ): Promise<ProviderExecutionResult<{ audioBase64: string; mimeType: string }>> {
     const start = Date.now();
-    const model = options.model || '@cf/deepgram/aura-tts';
+    const cleanAccountId = (accountId || '').split(',')[0].trim();
+    const cleanApiKey = (apiKey || '').split(',')[0].trim();
+    const model = (options.model && options.model.startsWith('@cf/'))
+      ? options.model
+      : '@cf/deepgram/aura-tts';
 
     try {
       const res = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+        `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${model}`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${cleanApiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ text: options.text }),

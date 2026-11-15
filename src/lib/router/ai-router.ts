@@ -18,7 +18,8 @@ export class AIRouter {
     task: TaskType,
     routerConfig: RouterConfig,
     providerConfigs: ProviderConfig[],
-    excludeProviderIds: ProviderId[] = []
+    excludeProviderIds: ProviderId[] = [],
+    preferredModelId?: string
   ): RouteResolution {
     const enabledProviders = providerConfigs.filter(
       (p) => p.enabled && !excludeProviderIds.includes(p.id)
@@ -26,6 +27,23 @@ export class AIRouter {
 
     if (enabledProviders.length === 0) {
       throw new Error(`Tidak ada AI Provider yang aktif untuk task: ${task}. Harap aktifkan provider di menu AI Provider Manager.`);
+    }
+
+    // 0. Honor user's explicitly selected model from UI dropdown (if provider is enabled and not excluded)
+    if (preferredModelId && excludeProviderIds.length === 0) {
+      const explicitDef = VERIFIED_MODELS.find((m) => m.id === preferredModelId);
+      if (explicitDef) {
+        const matchingProv = enabledProviders.find((p) => p.id === explicitDef.providerId);
+        if (matchingProv) {
+          return {
+            providerId: matchingProv.id,
+            modelId: explicitDef.id,
+            providerConfig: matchingProv,
+            modelDefinition: explicitDef,
+            isFallback: false,
+          };
+        }
+      }
     }
 
     // 1. Check MANUAL MODE
