@@ -3,6 +3,7 @@ import { Project, Episode, Scene } from '@/types/project';
 import { Character } from '@/types/character';
 import { GenerationHistoryItem, MediaBlobRecord } from '@/types/generation';
 import { ProviderConfig, RouterConfig } from '@/types/provider';
+import { ModelTestRecord, TaskSpecializationConfig } from '@/types/model-intelligence';
 
 export interface NeoStudioDBSchema extends DBSchema {
   projects: {
@@ -69,12 +70,16 @@ export interface NeoStudioDBSchema extends DBSchema {
     key: string;
     value: any;
   };
-  // Persistent model capability test history. Uses an auto-incremented
-  // numeric key so callers can store ModelTestRecord without requiring a
-  // particular ID field on the record.
   test_history: {
-    key: number;
-    value: any;
+    key: string;
+    value: ModelTestRecord;
+    indexes: {
+      'by-timestamp': number;
+    };
+  };
+  specializations: {
+    key: string;
+    value: TaskSpecializationConfig;
   };
 }
 
@@ -146,10 +151,15 @@ export function getDB(): Promise<IDBPDatabase<NeoStudioDBSchema>> {
           db.createObjectStore('discovered_models', { keyPath: 'id' });
         }
 
-        // Model test history (added in DB version 3). Auto-increment avoids
-        // assuming ModelTestRecord has a specific primary-key property.
+        // Test History Store (added in DB version 3).
         if (!db.objectStoreNames.contains('test_history')) {
-          db.createObjectStore('test_history', { autoIncrement: true });
+          const testHistoryStore = db.createObjectStore('test_history', { keyPath: 'id' });
+          testHistoryStore.createIndex('by-timestamp', 'timestamp');
+        }
+
+        // Task Specializations Store (added in DB version 3).
+        if (!db.objectStoreNames.contains('specializations')) {
+          db.createObjectStore('specializations', { keyPath: 'task' });
         }
       },
       blocked() {
