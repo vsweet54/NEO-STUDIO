@@ -238,10 +238,10 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
     isDefault: true,
   },
 
-  // --- OLLAMA (LOCAL) ---
+  // --- OLLAMA (CLOUD) ---
   {
-    id: 'llama3.2',
-    name: 'Llama 3.2 (Local Ollama)',
+    id: 'gpt-oss:120b',
+    name: 'GPT-OSS 120B (Ollama Cloud)',
     providerId: 'ollama',
     capabilities: {
       supportsText: true,
@@ -250,16 +250,16 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
       supportsAudioGen: false,
       supportsVision: true,
       maxContextTokens: 131072,
-      isLocal: true,
+      isLocal: false,
       costPer1kTokens: 0.0,
     },
-    description: 'Model lokal privasi penuh tanpa koneksi internet atau kuota API.',
+    description: 'Model open-weight 120B via Ollama Cloud.',
     recommendedFor: ['story', 'dialogue', 'prompt-engineering'],
     isDefault: true,
   },
   {
-    id: 'qwen2.5',
-    name: 'Qwen 2.5 (Local Ollama)',
+    id: 'qwen3-coder:480b',
+    name: 'Qwen3 Coder 480B (Ollama Cloud)',
     providerId: 'ollama',
     capabilities: {
       supportsText: true,
@@ -268,10 +268,10 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
       supportsAudioGen: false,
       supportsVision: false,
       maxContextTokens: 32768,
-      isLocal: true,
+      isLocal: false,
       costPer1kTokens: 0.0,
     },
-    description: 'Model lokal berkapabilitas instruksi dan penulisan cerita sangat kuat.',
+    description: 'Model coding & instruksi besar via Ollama Cloud.',
     recommendedFor: ['story', 'dialogue'],
   },
 

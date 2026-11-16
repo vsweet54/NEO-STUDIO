@@ -72,7 +72,7 @@ export const ProviderManager: React.FC = () => {
       apiKey: edit.apiKey,
       accountId: edit.accountId,
       baseUrl: edit.baseUrl,
-      status: edit.apiKey || provider.id === 'ollama' ? 'ready' : 'unconfigured',
+      status: edit.apiKey ? 'ready' : 'unconfigured',
     };
 
     await saveProviderConfig(updated);
@@ -183,7 +183,7 @@ export const ProviderManager: React.FC = () => {
             AI Provider Manager
           </h1>
           <p className="text-xs text-gray-400 mt-1">
-            Konfigurasi ekosistem AI multi-provider terintegrasi (Google Gemini, OpenRouter, NVIDIA NIM, Cloudflare Workers AI, Groq, dan Ollama).
+            Konfigurasi ekosistem AI multi-provider terintegrasi (Google Gemini, OpenRouter, NVIDIA NIM, Cloudflare Workers AI, Groq, dan Ollama Cloud).
           </p>
         </div>
 
@@ -260,7 +260,7 @@ export const ProviderManager: React.FC = () => {
                       {prov.id === 'nvidia' && 'Enterprise Deep Reasoning, Mixtral, Llama 3.1 70B'}
                       {prov.id === 'cloudflare' && 'Serverless Edge AI, FLUX.1 Schnell, Aura TTS'}
                       {prov.id === 'groq' && 'Ultra-Fast LPU Inference >300 tps, Dialogue, Whisper'}
-                      {prov.id === 'ollama' && 'Inference AI Lokal 100% Offline (Llama 3.2, Qwen)'}
+                      {prov.id === 'ollama' && 'Ollama Cloud (GPT-OSS 120B, Qwen3 Coder, DeepSeek) via API Key'}
                     </p>
                   </div>
                 </div>
@@ -304,7 +304,7 @@ export const ProviderManager: React.FC = () => {
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-medium text-gray-300">
                       {prov.id === 'ollama'
-                        ? 'API Key / Bearer Token'
+                        ? 'Ollama Cloud API Key'
                         : 'API Key (Multi-Key Pool)'}
                     </label>
                     {edit.apiKey && edit.apiKey.includes(',') && (
@@ -358,7 +358,7 @@ export const ProviderManager: React.FC = () => {
                     onChange={(e) => handleFieldChange(prov.id, 'baseUrl', e.target.value)}
                     placeholder={
                       prov.id === 'ollama'
-                        ? 'http://localhost:11434'
+                        ? 'https://ollama.com'
                         : prov.id === 'nvidia'
                         ? 'https://integrate.api.nvidia.com/v1'
                         : prov.id === 'openrouter'
@@ -380,12 +380,12 @@ export const ProviderManager: React.FC = () => {
                 </div>
               </div>
 
-              {/* Ollama local CORS guidance */}
+              {/* Ollama Cloud guidance */}
               {prov.id === 'ollama' && (
                 <div className="mt-3 p-3 bg-secondary/50 rounded-lg text-[11px] text-gray-300 flex items-start gap-2">
                   <Info className="w-4 h-4 text-accent-cyan shrink-0 mt-0.5" />
                   <p>
-                    <strong>Panduan Ollama (Lokal & Remote):</strong> Dukung endpoint lokal (<code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">http://localhost:11434</code>) maupun remote server / cloud proxy (<code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">https://ollama.domain.com</code>). Masukkan <strong>API Key / Bearer Token</strong> jika remote server Anda diproteksi autentikasi (Reverse Proxy, NGINX, Cloudflare Access, atau VPN). Untuk server lokal, jalankan dengan <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">OLLAMA_ORIGINS="*" ollama serve</code>.
+                    <strong>Ollama Cloud:</strong> pakai endpoint <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">https://ollama.com</code> dan <strong>API Key</strong> dari <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">ollama.com/settings/keys</code>. Tidak perlu daemon lokal. Contoh model: <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">gpt-oss:120b</code>, <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">qwen3-coder:480b</code>.
                   </p>
                 </div>
               )}

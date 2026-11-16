@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         provConfig.accountId = pairs.map((p) => p.accountId).join(',');
       }
     } else if (model.provider === 'ollama') {
-      provConfig.baseUrl = provConfig.baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+      provConfig.baseUrl = provConfig.baseUrl || process.env.OLLAMA_BASE_URL || 'https://ollama.com';
     }
 
     const record: ModelTestRecord = await ModelTestingEngine.testModel(model, provConfig, options);

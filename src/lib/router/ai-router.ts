@@ -65,7 +65,7 @@ export class AIRouter {
                 supportsAudioGen: task === 'tts',
                 supportsVision: false,
                 maxContextTokens: 32000,
-                isLocal: prov.id === 'ollama',
+                isLocal: false,
               },
               description: 'Custom selected model',
               recommendedFor: [task],

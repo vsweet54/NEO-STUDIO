@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 
       case 'ollama': {
         const keys = KeyPool.getKeys(apiKey, ['OLLAMA_API_KEY', 'OLLAMA_API_KEYS']);
-        const endpoint = safeBaseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+        const endpoint = safeBaseUrl || process.env.OLLAMA_BASE_URL || 'https://ollama.com';
         const activeKey = keys.length > 0 ? keys[0] : undefined;
         result = await OllamaAdapter.generateText(options, endpoint, activeKey);
         break;

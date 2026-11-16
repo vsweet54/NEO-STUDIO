@@ -424,7 +424,7 @@ export class ModelDiscoveryEngine {
     prov: ProviderConfig,
     serverEnvFallback: boolean
   ): Promise<DiscoveredModel[]> {
-    const endpoint = (prov.baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+    const endpoint = (prov.baseUrl || process.env.OLLAMA_BASE_URL || 'https://ollama.com').replace(/\/$/, '');
     const keys = KeyPool.getKeys(prov.apiKey, serverEnvFallback ? ['OLLAMA_API_KEY', 'OLLAMA_API_KEYS'] : []);
 
     try {
@@ -452,21 +452,21 @@ export class ModelDiscoveryEngine {
               supportsVision: id.includes('llava') || id.includes('vision'),
               supportsAudioInput: false,
               maxContextTokens: 32768,
-              isLocal: true,
+              isLocal: false,
             };
             return {
               id,
               name: id,
               provider: 'ollama',
-              description: `Model AI lokal ${id} (100% Offline)`,
+              description: `Model Ollama Cloud ${id}`,
               capabilities,
               roles: this.assignRoles(id, id, capabilities),
               pricing: {
                 classification: 'FREE',
                 verified: true,
-                source: 'Ollama Local Daemon',
+                source: 'Ollama Cloud',
                 lastChecked: Date.now(),
-                notes: 'Local execution (Zero API Cost)',
+                notes: 'Ollama Cloud (kuota sesuai akun Ollama)',
               },
               availability: 'available',
               authentication: 'passed',
@@ -479,7 +479,7 @@ export class ModelDiscoveryEngine {
       // Return curated fallback
     }
 
-    return this.getOllamaFallbackCatalog(false);
+    return this.getOllamaFallbackCatalog(keys.length > 0);
   }
 
   /**
@@ -899,10 +899,10 @@ export class ModelDiscoveryEngine {
   private static getOllamaFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'llama3.2',
-        name: 'Llama 3.2 (Local Ollama)',
+        id: 'gpt-oss:120b',
+        name: 'GPT-OSS 120B (Ollama Cloud)',
         provider: 'ollama',
-        description: 'Model lokal privasi penuh tanpa koneksi internet atau kuota API.',
+        description: 'Model open-weight 120B via Ollama Cloud, kuat untuk chat, reasoning, dan penulisan.',
         capabilities: {
           supportsText: true,
           supportsImageGen: false,
@@ -911,19 +911,19 @@ export class ModelDiscoveryEngine {
           supportsVision: false,
           supportsAudioInput: false,
           maxContextTokens: 131072,
-          isLocal: true,
+          isLocal: false,
         },
         roles: ['GENERAL_CHAT', 'CODING', 'WRITING', 'STORYBOARD'],
-        pricing: { classification: 'FREE', verified: true, source: 'Local Hardware', lastChecked: Date.now() },
+        pricing: { classification: 'FREE', verified: true, source: 'Ollama Cloud', lastChecked: Date.now() },
         availability: 'available',
         authentication: 'passed',
         testStatus: 'READY',
       },
       {
-        id: 'qwen2.5',
-        name: 'Qwen 2.5 (Local Ollama)',
+        id: 'qwen3-coder:480b',
+        name: 'Qwen3 Coder 480B (Ollama Cloud)',
         provider: 'ollama',
-        description: 'Model lokal berkapabilitas instruksi dan penulisan cerita sangat kuat.',
+        description: 'Model coding & instruksi besar via Ollama Cloud.',
         capabilities: {
           supportsText: true,
           supportsImageGen: false,
@@ -932,10 +932,10 @@ export class ModelDiscoveryEngine {
           supportsVision: false,
           supportsAudioInput: false,
           maxContextTokens: 32768,
-          isLocal: true,
+          isLocal: false,
         },
         roles: ['CODING', 'REASONING', 'WRITING', 'GENERAL_CHAT'],
-        pricing: { classification: 'FREE', verified: true, source: 'Local Hardware', lastChecked: Date.now() },
+        pricing: { classification: 'FREE', verified: true, source: 'Ollama Cloud', lastChecked: Date.now() },
         availability: 'available',
         authentication: 'passed',
         testStatus: 'READY',

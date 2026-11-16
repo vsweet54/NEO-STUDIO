@@ -4,6 +4,7 @@ const PROVIDER_HOSTS: Record<string, string[]> = {
   groq: ['api.groq.com'],
   nvidia: ['integrate.api.nvidia.com'],
   openrouter: ['openrouter.ai'],
+  ollama: ['ollama.com'],
 };
 
 function isPrivateIpv4(host: string): boolean {
@@ -24,16 +25,19 @@ export function validateProviderBaseUrl(providerId: string, rawUrl?: string): st
     throw new Error('Base URL tidak boleh berisi kredensial, query, atau fragment.');
   }
   const host = parsed.hostname.toLowerCase();
-  const localOllamaDev = providerId === 'ollama' && process.env.NODE_ENV !== 'production' && (host === 'localhost' || host === '127.0.0.1') && parsed.protocol === 'http:';
-  if (parsed.protocol !== 'https:' && !localOllamaDev) throw new Error('Base URL provider harus menggunakan HTTPS (kecuali Ollama localhost saat development).');
-  if (!localOllamaDev && (isIP(host) || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPrivateIpv4(host))) {
+  // Config lama Ollama (localhost / IP lokal) diabaikan -> otomatis pakai Ollama Cloud
+  if (providerId === 'ollama' && (isIP(host) || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPrivateIpv4(host))) {
+    return undefined;
+  }
+  if (parsed.protocol !== 'https:') throw new Error('Base URL provider harus menggunakan HTTPS.');
+  if ((isIP(host) || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPrivateIpv4(host))) {
     throw new Error('Base URL ke alamat IP/local/private tidak diizinkan.');
   }
   const allowed = PROVIDER_HOSTS[providerId];
   if (allowed && !allowed.includes(host)) {
     throw new Error(`Host Base URL tidak sesuai dengan provider ${providerId}.`);
   }
-  if (!allowed && providerId !== 'ollama') {
+  if (!allowed) {
     throw new Error('Provider ini tidak mendukung Base URL kustom.');
   }
   return parsed.toString().replace(/\/$/, '');

@@ -38,11 +38,11 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
   },
   {
     id: 'ollama',
-    name: 'Ollama (Local AI)',
+    name: 'Ollama (Cloud)',
     enabled: false,
     status: 'unconfigured',
-    baseUrl: 'http://localhost:11434',
-    defaultTextModel: 'llama3.2',
+    baseUrl: 'https://ollama.com',
+    defaultTextModel: 'gpt-oss:120b',
   },
   {
     id: 'openrouter',
@@ -92,7 +92,24 @@ export async function getProviderConfigs(): Promise<ProviderConfig[]> {
     await setSetting('providers_config', DEFAULT_PROVIDERS);
     return DEFAULT_PROVIDERS;
   }
-  return stored;
+  // Migrasi: config Ollama lama (lokal) -> Ollama Cloud
+  let migrated = false;
+  const fixed = stored.map((p) => {
+    if (p.id !== 'ollama') return p;
+    const isLocalUrl = !p.baseUrl || /localhost|127\.0\.0\.1|^http:/i.test(p.baseUrl);
+    const oldModel = !p.defaultTextModel || p.defaultTextModel === 'llama3.2' || p.defaultTextModel === 'qwen2.5';
+    if (!isLocalUrl && !oldModel && p.name === 'Ollama (Cloud)') return p;
+    migrated = true;
+    return {
+      ...p,
+      name: 'Ollama (Cloud)',
+      baseUrl: isLocalUrl ? 'https://ollama.com' : p.baseUrl,
+      defaultTextModel: oldModel ? 'gpt-oss:120b' : p.defaultTextModel,
+      status: p.apiKey ? p.status : 'unconfigured',
+    } as ProviderConfig;
+  });
+  if (migrated) await setSetting('providers_config', fixed);
+  return fixed;
 }
 
 export async function saveProviderConfig(config: ProviderConfig): Promise<void> {

@@ -304,7 +304,7 @@ export const ModelLabView: React.FC = () => {
             </h1>
             <p className="text-xs sm:text-sm text-gray-300 mt-1 max-w-2xl">
               Sistem penemuan mandiri, pengujian inferensi nyata, deteksi model gratis, klasifikasi kapabilitas,
-              dan routing tugas multi-provider otomatis untuk Google Gemini, Groq, NVIDIA, OpenRouter, Ollama, dan Cloudflare.
+              dan routing tugas multi-provider otomatis untuk Google Gemini, Groq, NVIDIA, OpenRouter, Ollama Cloud, dan Cloudflare.
             </p>
           </div>
 
@@ -497,7 +497,7 @@ export const ModelLabView: React.FC = () => {
               <option value="nvidia">NVIDIA NIM</option>
               <option value="openrouter">OpenRouter</option>
               <option value="cloudflare">Cloudflare Workers AI</option>
-              <option value="ollama">Ollama (Lokal)</option>
+              <option value="ollama">Ollama (Cloud)</option>
             </select>
 
             {/* Capability Filter */}
