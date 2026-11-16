@@ -204,6 +204,23 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
     isDefault: true,
   },
   {
+    id: 'llama-3.1-8b-instant',
+    name: 'Llama 3.1 8B Instant (Groq LPU)',
+    providerId: 'groq',
+    capabilities: {
+      supportsText: true,
+      supportsImageGen: false,
+      supportsVideoGen: false,
+      supportsAudioGen: false,
+      supportsVision: false,
+      maxContextTokens: 131072,
+      isLocal: false,
+      costPer1kTokens: 0.00008,
+    },
+    description: 'Model ultra cepat (>500 tps) tersedia untuk semua tier akun Groq.',
+    recommendedFor: ['story', 'dialogue', 'script', 'prompt-engineering'],
+  },
+  {
     id: 'whisper-large-v3',
     name: 'Whisper Large v3 (Groq LPU)',
     providerId: 'groq',
