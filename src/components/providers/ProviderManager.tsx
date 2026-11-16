@@ -19,10 +19,13 @@ import { Badge } from '../ui/Badge';
 import { Input, Select } from '../ui/Input';
 import { ProviderConfig, ProviderId } from '@/types/provider';
 import { getProviderConfigs, saveProviderConfig } from '@/lib/db/settings';
+import { VERIFIED_MODELS } from '@/lib/providers/registry';
 
 export const ProviderManager: React.FC = () => {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [modelTestingId, setModelTestingId] = useState<string | null>(null);
+  const [modelTestResults, setModelTestResults] = useState<Record<string, { success: boolean; message: string; score?: number; latencyMs?: number }>>({});
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string; latencyMs?: number }>>({});
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
@@ -130,6 +133,40 @@ export const ProviderManager: React.FC = () => {
     }
   };
 
+
+  const handleTestModel = async (provider: ProviderConfig) => {
+    const edit = editStates[provider.id] || {};
+    const candidate = VERIFIED_MODELS.find((model) => model.providerId === provider.id && model.capabilities.supportsText);
+    if (!candidate) {
+      setModelTestResults((prev) => ({ ...prev, [provider.id]: { success: false, message: 'Belum ada model teks terdaftar untuk provider ini.' } }));
+      return;
+    }
+    setModelTestingId(provider.id);
+    try {
+      const res = await fetch('/api/providers/model-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId: provider.id, modelId: candidate.id, apiKey: edit.apiKey, accountId: edit.accountId, baseUrl: edit.baseUrl }),
+      });
+      const json = await res.json();
+      setModelTestResults((prev) => ({
+        ...prev,
+        [provider.id]: {
+          success: Boolean(json.success),
+          message: json.success
+            ? `${candidate.id}: tes text berhasil${json.checks?.instructionMatch ? ' dan instruksi cocok' : ', tetapi instruksi tidak cocok'}.`
+            : `${candidate.id}: ${json.error || 'tes model gagal'}`,
+          score: json.score,
+          latencyMs: json.latencyMs,
+        },
+      }));
+    } catch (error: any) {
+      setModelTestResults((prev) => ({ ...prev, [provider.id]: { success: false, message: error?.message || 'Network failure' } }));
+    } finally {
+      setModelTestingId(null);
+    }
+  };
+
   const handleToggleEnable = async (provider: ProviderConfig) => {
     const updated = { ...provider, enabled: !provider.enabled };
     await saveProviderConfig(updated);
@@ -179,6 +216,7 @@ export const ProviderManager: React.FC = () => {
         {providers.map((prov) => {
           const edit = editStates[prov.id] || { apiKey: '', accountId: '', baseUrl: '' };
           const test = testResults[prov.id];
+          const modelTest = modelTestResults[prov.id];
           const isTesting = testingId === prov.id;
 
           return (
@@ -237,6 +275,16 @@ export const ProviderManager: React.FC = () => {
                     {prov.enabled ? 'Nonaktifkan' : 'Aktifkan'}
                   </Button>
 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleTestModel(prov)}
+                    isLoading={modelTestingId === prov.id}
+                    className="text-xs"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Tes Model Teks
+                  </Button>
                   <Button
                     variant="cyan"
                     size="sm"
@@ -364,6 +412,16 @@ export const ProviderManager: React.FC = () => {
                       </p>
                     )}
                   </div>
+                </div>
+              )}
+
+              {modelTest && (
+                <div className={`mt-3 p-3 rounded-xl text-xs ${modelTest.success ? 'bg-emerald-950/40 border border-emerald-800 text-emerald-300' : 'bg-red-950/40 border border-red-800 text-red-300'}`}>
+                  <p className="font-semibold">{modelTest.success ? 'Tes kemampuan model teks' : 'Tes model gagal'}</p>
+                  <p className="mt-1">{modelTest.message}</p>
+                  {modelTest.score !== undefined && <p className="mt-1">Skor smoke-test: {modelTest.score}/100</p>}
+                  {modelTest.latencyMs !== undefined && <p className="mt-1 font-mono">Latency: {modelTest.latencyMs}ms</p>}
+                  <p className="mt-1 opacity-70">Tes ini hanya memverifikasi text generation, bukan kemampuan vision/image/audio/video atau benchmark kualitas penuh.</p>
                 </div>
               )}
             </div>

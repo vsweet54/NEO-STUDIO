@@ -6,10 +6,19 @@ import {
   ProviderConnectionTestResult,
 } from './types';
 
+function assertCloudflareAccountId(value: string): void {
+  if (!/^[a-f0-9]{32}$/i.test(value)) throw new Error('Cloudflare Account ID harus berupa 32 karakter heksadesimal.');
+}
+
+function assertCloudflareModelId(value: string): void {
+  if (!/^@cf\/[A-Za-z0-9._/-]+$/.test(value) || value.includes('..')) throw new Error('Cloudflare model ID tidak valid.');
+}
+
 export class CloudflareAdapter {
   static async testConnection(apiKey: string, accountId?: string): Promise<ProviderConnectionTestResult> {
     const start = Date.now();
     const cleanAccountId = (accountId || '').split(',')[0].trim();
+    if (cleanAccountId) assertCloudflareAccountId(cleanAccountId);
     const cleanApiKey = (apiKey || '').split(',')[0].trim();
 
     if (!cleanAccountId) {
@@ -24,6 +33,7 @@ export class CloudflareAdapter {
     try {
       // Test running a lightweight prompt on Llama 3.1 8b
       const testModel = '@cf/meta/llama-3.1-8b-instruct';
+      assertCloudflareModelId(testModel);
       const res = await fetch(
         `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${testModel}`,
         {
@@ -51,9 +61,9 @@ export class CloudflareAdapter {
 
       return {
         success: true,
-        message: `Terhubung ke Cloudflare Workers AI (${latencyMs}ms). Edge serverless siap.`,
+        message: `Terhubung ke Cloudflare Workers AI (${latencyMs}ms). Tes inference teks berhasil; jumlah model katalog belum diverifikasi.`,
         latencyMs,
-        modelsFound: 4,
+        modelsFound: 0,
       };
     } catch (err: any) {
       return {
@@ -72,10 +82,12 @@ export class CloudflareAdapter {
   ): Promise<ProviderExecutionResult<{ text: string }>> {
     const start = Date.now();
     const cleanAccountId = (accountId || '').split(',')[0].trim();
+    if (cleanAccountId) assertCloudflareAccountId(cleanAccountId);
     const cleanApiKey = (apiKey || '').split(',')[0].trim();
     const model = (options.model && options.model.startsWith('@cf/'))
       ? options.model
       : '@cf/meta/llama-3.1-8b-instruct';
+    assertCloudflareModelId(model);
 
     try {
       const messages = [];
@@ -133,10 +145,12 @@ export class CloudflareAdapter {
   ): Promise<ProviderExecutionResult<{ imageBase64: string; mimeType: string }>> {
     const start = Date.now();
     const cleanAccountId = (accountId || '').split(',')[0].trim();
+    if (cleanAccountId) assertCloudflareAccountId(cleanAccountId);
     const cleanApiKey = (apiKey || '').split(',')[0].trim();
     const model = (options.model && options.model.startsWith('@cf/'))
       ? options.model
       : '@cf/black-forest-labs/flux-1-schnell';
+    assertCloudflareModelId(model);
 
     try {
       // Map dimensions according to aspect ratio
@@ -232,10 +246,12 @@ export class CloudflareAdapter {
   ): Promise<ProviderExecutionResult<{ audioBase64: string; mimeType: string }>> {
     const start = Date.now();
     const cleanAccountId = (accountId || '').split(',')[0].trim();
+    if (cleanAccountId) assertCloudflareAccountId(cleanAccountId);
     const cleanApiKey = (apiKey || '').split(',')[0].trim();
     const model = (options.model && options.model.startsWith('@cf/'))
       ? options.model
       : '@cf/deepgram/aura-tts';
+    assertCloudflareModelId(model);
 
     try {
       const res = await fetch(

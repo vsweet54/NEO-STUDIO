@@ -102,3 +102,29 @@ node tests/smoke-test.js
 
 ## 5. Lisensi & Hak Cipta
 NEO STUDIO AI © 2026. Dikembangkan sebagai sistem mandiri berstandar rekayasa perangkat lunak senior.
+
+
+## 6. Pengujian Model Teks (Capability Smoke Test)
+
+Menu **AI Provider Manager** menyediakan dua jenis pemeriksaan yang berbeda:
+
+- **Test Koneksi** memeriksa akses provider dan autentikasi.
+- **Tes Model Teks** menjalankan inference sungguhan pada satu model teks pertama yang terdaftar untuk provider tersebut, lalu memeriksa apakah output tidak kosong dan apakah instruksi uji dipatuhi.
+
+Endpoint internal: `POST /api/providers/model-test`.
+
+Contoh payload (kirim melalui UI agar kredensial tidak ditulis ke terminal atau log):
+
+```json
+{
+  "providerId": "groq",
+  "modelId": "llama-3.3-70b-versatile",
+  "apiKey": "<API_KEY>"
+}
+```
+
+Respons memuat `capabilityTested`, `capabilityVerified`, `checks`, `score`, `latencyMs`, dan `outputPreview`. Skor adalah smoke-test sederhana, bukan benchmark kualitas atau bukti model gratis. Tes ini menggunakan inference sungguhan dan dapat mengonsumsi kuota/biaya provider.
+
+Untuk provider yang mendukung Base URL kustom, validasi server membatasi protokol/host untuk mengurangi risiko SSRF dan kebocoran kredensial. Ollama remote harus menggunakan HTTPS di production; Ollama localhost hanya diizinkan pada development.
+
+**Batasan saat ini:** endpoint ini baru memverifikasi text generation untuk satu model terpilih per provider. Belum melakukan benchmark semua model, tes vision, image/audio/video, deteksi harga, penyimpanan hasil historis, atau pemeringkatan otomatis lintas tugas. Jangan menyebut model sebagai image/video/audio generator sebelum tes modality khusus menghasilkan artefak yang benar.

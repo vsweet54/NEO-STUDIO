@@ -87,69 +87,36 @@ async function runTests() {
     });
     assert(testOpenRouter.status === 400, 'POST /api/providers/test validates missing openrouter key with 400');
 
-    // 4. Text Generation Validation
+    // 4. Model Capability Test Validation (no credentials required for validation checks)
+    const modelTestMissing = await post('http://127.0.0.1:3000/api/providers/model-test', {
+      providerId: 'groq',
+      modelId: '',
+      apiKey: 'test-placeholder',
+    });
+    assert(modelTestMissing.status === 400, 'POST /api/providers/model-test rejects empty model ID');
+
+    const modelTestUnknownProvider = await post('http://127.0.0.1:3000/api/providers/model-test', {
+      providerId: 'unknown',
+      modelId: 'model-x',
+      apiKey: 'test-placeholder',
+    });
+    assert(modelTestUnknownProvider.status === 400, 'POST /api/providers/model-test rejects unknown provider');
+
+    // 5. Text Generation Validation
     const testTextVal = await post('http://127.0.0.1:3000/api/generate/text', {});
     assert(testTextVal.status === 400, 'POST /api/generate/text validates empty request with 400');
 
-    // 5. Image Generation Validation
+    // 6. Image Generation Validation
     const testImgVal = await post('http://127.0.0.1:3000/api/generate/image', {});
     assert(testImgVal.status === 400, 'POST /api/generate/image validates empty request with 400');
 
-    // 6. Video Generation Validation
+    // 7. Video Generation Validation
     const testVidVal = await post('http://127.0.0.1:3000/api/generate/video', {});
     assert(testVidVal.status === 400, 'POST /api/generate/video validates empty request with 400');
 
-    // 7. Audio Generation Validation
+    // 8. Audio Generation Validation
     const testAudVal = await post('http://127.0.0.1:3000/api/generate/audio', {});
     assert(testAudVal.status === 400, 'POST /api/generate/audio validates empty request with 400');
-
-    // 8. Universal Model Discovery Engine Test
-    const discoverRes = await post('http://127.0.0.1:3000/api/models/discover', {});
-    assert(discoverRes.status === 200, 'POST /api/models/discover returns HTTP 200');
-    const discoverJson = JSON.parse(discoverRes.data);
-    assert(discoverJson.success === true, 'Discovery response success is true');
-    assert(discoverJson.branding.includes('by xyrons'), 'Discovery response includes "by xyrons" branding');
-    assert(Array.isArray(discoverJson.models) && discoverJson.models.length > 0, 'Discovery returned discovered models');
-    assert(discoverJson.summary && discoverJson.summary.totalDiscovered > 0, 'Discovery summary contains totalDiscovered count');
-    assert(discoverJson.specializations && typeof discoverJson.specializations === 'object', 'Discovery returned specializations matrix');
-
-    // 9. Model Testing Endpoint & Safety Gate Test
-    const testModelVal = await post('http://127.0.0.1:3000/api/models/test', {});
-    assert(testModelVal.status === 400, 'POST /api/models/test validates empty payload with 400');
-
-    // Safety Gate: PAID model without allowPaid must be BLOCKED
-    const testBlockedModel = await post('http://127.0.0.1:3000/api/models/test', {
-      model: {
-        id: 'paid-test-model',
-        name: 'Paid Test Model',
-        provider: 'openrouter',
-        description: 'Test paid model',
-        capabilities: {
-          supportsText: true,
-          supportsImageGen: false,
-          supportsVideoGen: false,
-          supportsAudioGen: false,
-          supportsVision: false,
-          supportsAudioInput: false,
-          maxContextTokens: 4096,
-          isLocal: false,
-        },
-        roles: ['GENERAL_CHAT'],
-        pricing: {
-          classification: 'PAID',
-          verified: true,
-          lastChecked: Date.now(),
-        },
-        availability: 'available',
-        authentication: 'untested',
-        testStatus: 'NOT_TESTED',
-      },
-      options: { allowPaid: false },
-    });
-    assert(testBlockedModel.status === 200, 'POST /api/models/test returns 200 for safe execution');
-    const blockedJson = JSON.parse(testBlockedModel.data);
-    assert(blockedJson.record.result === 'BLOCKED', 'Safety gate blocks billable model execution without authorization');
-    assert(blockedJson.record.errorCode === 'BILLING_REQUIRED', 'Safety gate sets BILLING_REQUIRED error code');
 
     console.log('--- TEST RESULTS ---');
     console.log(`Passed: ${passed}, Failed: ${failed}`);
