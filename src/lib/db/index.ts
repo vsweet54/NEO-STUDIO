@@ -69,10 +69,17 @@ export interface NeoStudioDBSchema extends DBSchema {
     key: string;
     value: any;
   };
+  // Persistent model capability test history. Uses an auto-incremented
+  // numeric key so callers can store ModelTestRecord without requiring a
+  // particular ID field on the record.
+  test_history: {
+    key: number;
+    value: any;
+  };
 }
 
 const DB_NAME = 'neo_studio_ai_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<NeoStudioDBSchema>> | null = null;
 
@@ -137,6 +144,12 @@ export function getDB(): Promise<IDBPDatabase<NeoStudioDBSchema>> {
         // Existing stores and user data are preserved during this upgrade.
         if (!db.objectStoreNames.contains('discovered_models')) {
           db.createObjectStore('discovered_models', { keyPath: 'id' });
+        }
+
+        // Model test history (added in DB version 3). Auto-increment avoids
+        // assuming ModelTestRecord has a specific primary-key property.
+        if (!db.objectStoreNames.contains('test_history')) {
+          db.createObjectStore('test_history', { autoIncrement: true });
         }
       },
       blocked() {
