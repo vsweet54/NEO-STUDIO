@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { VERIFIED_MODELS, PROVIDERS } from "@/lib/providers/registry"; 
 
-export default function ProviderManager() {
+// ⭐️ PERBAIKAN: Menggunakan Named Export (bukan export default) ⭐️
+export function ProviderManager() {
   const [editStates, setEditStates] = useState<Record<string, any>>({});
   const [modelTestResults, setModelTestResults] = useState<Record<string, any>>({});
   const [modelTestingId, setModelTestingId] = useState<string | null>(null);
@@ -12,18 +13,15 @@ export default function ProviderManager() {
   const [dynamicModels, setDynamicModels] = useState<Record<string, {id: string, name: string}[]>>({});
   const [isFetchingModels, setIsFetchingModels] = useState<Record<string, boolean>>({});
   
-  // State untuk status "READY" atau "UNCONFIGURED" di UI
   const [providerStatus, setProviderStatus] = useState<Record<string, string>>({});
   const [savedMessage, setSavedMessage] = useState<Record<string, string>>({});
 
-  // 1. LOAD DATA SAAT HALAMAN DIBUKA (Bisa ganti dengan IndexedDB)
   useEffect(() => {
     const savedConfigs = localStorage.getItem("neo_studio_configs");
     if (savedConfigs) {
       const parsed = JSON.parse(savedConfigs);
       setEditStates(parsed);
       
-      // Update status jika ada API Key
       const newStatus: Record<string, string> = {};
       Object.keys(parsed).forEach(key => {
         if (parsed[key].apiKey) newStatus[key] = "READY";
@@ -39,16 +37,12 @@ export default function ProviderManager() {
     }));
   };
 
-  // 2. FUNGSI SIMPAN KONFIGURASI (Tombol Ungu)
   const handleSaveConfig = (providerId: string) => {
     const currentData = editStates[providerId] || {};
-    
-    // Simpan ke LocalStorage/IndexedDB
     const allConfigs = JSON.parse(localStorage.getItem("neo_studio_configs") || "{}");
     allConfigs[providerId] = currentData;
     localStorage.setItem("neo_studio_configs", JSON.stringify(allConfigs));
 
-    // Update status UI menjadi READY
     setProviderStatus(prev => ({ ...prev, [providerId]: "READY" }));
     setSavedMessage(prev => ({ ...prev, [providerId]: "✅ Konfigurasi tersimpan!" }));
     
@@ -57,7 +51,6 @@ export default function ProviderManager() {
     }, 3000);
   };
 
-  // 3. FUNGSI AMBIL MODEL (Auto-Fetch)
   const handleFetchModels = async (providerId: string) => {
     const edit = editStates[providerId] || {};
     if (!edit.apiKey) {
@@ -86,7 +79,6 @@ export default function ProviderManager() {
     }
   };
 
-  // 4. FUNGSI TES MODEL
   const handleTestModel = async (providerId: string) => {
     const edit = editStates[providerId] || {};
     const selectedId = selectedModelIds[providerId];
@@ -145,7 +137,6 @@ export default function ProviderManager() {
         const staticModels = VERIFIED_MODELS.filter((m) => m.providerId === prov.id);
         const fetchedModels = dynamicModels[prov.id] || [];
         
-        // Gabungkan model
         const allAvailableModels = [...staticModels];
         fetchedModels.forEach(fm => {
           if (!allAvailableModels.find(sm => sm.id === fm.id)) {
@@ -156,7 +147,6 @@ export default function ProviderManager() {
         return (
           <div key={prov.id} className="border border-gray-800 rounded-xl p-6 bg-[#0f111a] text-white">
             
-            {/* HEADER & STATUS BADGE */}
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-lg font-semibold">{prov.name} API</h3>

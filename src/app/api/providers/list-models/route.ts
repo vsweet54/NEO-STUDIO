@@ -13,10 +13,9 @@ export async function POST(req: NextRequest) {
     let url = '';
     let headers: Record<string, string> = { 'Authorization': `Bearer ${apiKey}` };
 
-    // Tentukan endpoint untuk mengambil daftar model
     if (providerId === 'gemini') {
       url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-      headers = {}; // Gemini pakai query param untuk key
+      headers = {}; 
     } else if (providerId === 'groq') {
       url = `https://api.groq.com/openai/v1/models`;
     } else if (providerId === 'nvidia') {
@@ -25,7 +24,7 @@ export async function POST(req: NextRequest) {
       url = `https://openrouter.ai/api/v1/models`;
     } else if (providerId === 'ollama') {
       const endpoint = baseUrl || 'https://ollama.com';
-      url = `${endpoint}/api/tags`; // Endpoint standar Ollama untuk list model
+      url = `${endpoint}/api/tags`; 
     } else if (providerId === 'cloudflare') {
       if (!accountId) return NextResponse.json({ error: 'Cloudflare butuh Account ID' }, { status: 400 });
       url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/models/search`;
@@ -40,14 +39,13 @@ export async function POST(req: NextRequest) {
       throw new Error(data.error?.message || 'Gagal mengambil daftar model');
     }
 
-    // Ekstrak dan format daftar model agar seragam
     let models: { id: string, name: string }[] = [];
 
     if (providerId === 'gemini') {
       models = data.models
         .filter((m: any) => m.supportedGenerationMethods.includes("generateContent"))
         .map((m: any) => ({
-          id: m.name.replace('models/', ''), // Hapus prefix 'models/'
+          id: m.name.replace('models/', ''), 
           name: m.displayName || m.name
         }));
     } else if (providerId === 'ollama') {
@@ -55,11 +53,9 @@ export async function POST(req: NextRequest) {
     } else if (providerId === 'cloudflare') {
       models = data.result.map((m: any) => ({ id: m.name, name: m.name }));
     } else {
-      // Format standar OpenAI-compatible (Groq, Nvidia, OpenRouter)
       models = data.data.map((m: any) => ({ id: m.id, name: m.id }));
     }
 
-    // Urutkan berdasarkan abjad
     models.sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json({ success: true, models });

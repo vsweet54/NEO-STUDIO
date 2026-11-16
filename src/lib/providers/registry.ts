@@ -1,348 +1,89 @@
-import { ModelDefinition } from '@/types/provider';
+export interface ModelCapabilities {
+  supportsText: boolean;
+  supportsVision: boolean;
+  supportsAudio: boolean;
+}
+
+export interface ModelDefinition {
+  id: string;
+  name: string;
+  providerId: string;
+  capabilities: ModelCapabilities;
+}
+
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  description: string;
+  status?: string;
+}
+
+// ⭐️ PASTIKAN BAGIAN INI ADA AGAR TIDAK ERROR ⭐️
+export const PROVIDERS: ProviderConfig[] = [
+  { id: "gemini", name: "Google Gemini", description: "Story, Script, Characters, Imagen 3" },
+  { id: "nvidia", name: "NVIDIA NIM", description: "Enterprise Deep Reasoning, Mixtral" },
+  { id: "cloudflare", name: "Cloudflare Workers AI", description: "Edge AI Inference" },
+  { id: "groq", name: "Groq", description: "Ultra-Fast LPU Inference" },
+  { id: "ollama", name: "Ollama (Cloud)", description: "Cloud-hosted open models" },
+  { id: "openrouter", name: "OpenRouter", description: "Unified Multi-Model Gateway" }
+];
 
 export const VERIFIED_MODELS: ModelDefinition[] = [
   // --- GOOGLE GEMINI ---
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    providerId: 'gemini',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: true,
-      maxContextTokens: 1048576,
-      isLocal: false,
-      costPer1kTokens: 0.0001,
-    },
-    description: 'Generasi tercepat multimodal dengan reasoning tinggi dan latency sangat rendah.',
-    recommendedFor: ['story', 'script', 'storyboard', 'dialogue', 'character-analysis'],
-    isDefault: true,
+    id: "gemini-1.5-flash",
+    name: "Gemini 1.5 Flash",
+    providerId: "gemini",
+    capabilities: { supportsText: true, supportsVision: true, supportsAudio: false }
   },
   {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
-    providerId: 'gemini',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: true,
-      maxContextTokens: 2097152,
-      isLocal: false,
-      costPer1kTokens: 0.00125,
-    },
-    description: 'Model ultra reasoning dengan konteks raksasa 2M token untuk film & cerita panjang.',
-    recommendedFor: ['story', 'script', 'character-analysis'],
-  },
-  {
-    id: 'imagen-3.0-generate-002',
-    name: 'Imagen 3.0',
-    providerId: 'gemini',
-    capabilities: {
-      supportsText: false,
-      supportsImageGen: true,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 0,
-      isLocal: false,
-      costPerImage: 0.03,
-    },
-    description: 'Model text-to-image Google (memerlukan Google Cloud Project Vertex AI predict quota).',
-    recommendedFor: ['image'],
-    isDefault: false,
-  },
-  {
-    id: 'veo-2.0-generate-001',
-    name: 'Google Veo 2',
-    providerId: 'gemini',
-    capabilities: {
-      supportsText: false,
-      supportsImageGen: false,
-      supportsVideoGen: true,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 0,
-      isLocal: false,
-      costPerSecondVideo: 0.15,
-    },
-    description: 'Model video AI Google DeepMind (memerlukan akses whitelist Vertex AI Veo Preview pada GCP).',
-    recommendedFor: ['video'],
-    isDefault: true,
-  },
-
-  // --- NVIDIA NIM ---
-  {
-    id: 'meta/llama-3.1-70b-instruct',
-    name: 'Llama 3.1 70B Instruct (NVIDIA NIM)',
-    providerId: 'nvidia',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 131072,
-      isLocal: false,
-      costPer1kTokens: 0.0008,
-    },
-    description: 'Model open-weight kelas enterprise di-host dengan akselerasi TensorRT-LLM.',
-    recommendedFor: ['story', 'character-analysis', 'script'],
-    isDefault: true,
-  },
-  {
-    id: 'deepseek-ai/deepseek-r1',
-    name: 'DeepSeek R1 (NVIDIA NIM)',
-    providerId: 'nvidia',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 65536,
-      isLocal: false,
-      costPer1kTokens: 0.002,
-    },
-    description: 'Model reasoning mendalam dengan chain-of-thought transparan untuk plot kompleks.',
-    recommendedFor: ['story', 'character-analysis'],
-  },
-
-  // --- CLOUDFLARE WORKERS AI ---
-  {
-    id: '@cf/meta/llama-3.1-8b-instruct',
-    name: 'Llama 3.1 8B Instruct (Cloudflare)',
-    providerId: 'cloudflare',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 8192,
-      isLocal: false,
-      costPer1kTokens: 0.00001,
-    },
-    description: 'Serverless global edge text generation dengan biaya super hemat.',
-    recommendedFor: ['dialogue', 'prompt-engineering'],
-    isDefault: true,
-  },
-  {
-    id: '@cf/black-forest-labs/flux-1-schnell',
-    name: 'FLUX.1 Schnell (Cloudflare)',
-    providerId: 'cloudflare',
-    capabilities: {
-      supportsText: false,
-      supportsImageGen: true,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 0,
-      isLocal: false,
-      costPerImage: 0.005,
-    },
-    description: 'Model visual mutakhir 12B parameter FLUX.1 yang berjalan di edge Cloudflare GPU.',
-    recommendedFor: ['image'],
-    isDefault: true,
-  },
-  {
-    id: '@cf/stabilityai/stable-diffusion-xl-base-1.0',
-    name: 'SDXL Base 1.0 (Cloudflare)',
-    providerId: 'cloudflare',
-    capabilities: {
-      supportsText: false,
-      supportsImageGen: true,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 0,
-      isLocal: false,
-      costPerImage: 0.003,
-    },
-    description: 'Stable Diffusion XL edge inference untuk gambar dan storyboard sinematik.',
-    recommendedFor: ['image'],
-  },
-  {
-    id: '@cf/deepgram/aura-tts',
-    name: 'Aura TTS (Cloudflare)',
-    providerId: 'cloudflare',
-    capabilities: {
-      supportsText: false,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: true,
-      supportsVision: false,
-      maxContextTokens: 0,
-      isLocal: false,
-      costPer1kTokens: 0.001,
-    },
-    description: 'Text-to-speech alami dengan latensi rendah untuk narasi dan dialog.',
-    recommendedFor: ['tts'],
-    isDefault: true,
+    id: "gemini-1.5-pro",
+    name: "Gemini 1.5 Pro",
+    providerId: "gemini",
+    capabilities: { supportsText: true, supportsVision: true, supportsAudio: true }
   },
 
   // --- GROQ ---
   {
-    id: 'llama-3.3-70b-versatile',
-    name: 'Llama 3.3 70B Versatile (Groq LPU)',
-    providerId: 'groq',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 131072,
-      isLocal: false,
-      costPer1kTokens: 0.00059,
-    },
-    description: 'Kecepatan inferensi tercepat di dunia (>300 token/dtk) bertenaga Groq LPU.',
-    recommendedFor: ['story', 'dialogue', 'script', 'prompt-engineering'],
-    isDefault: true,
+    id: "llama-3.3-70b-versatile",
+    name: "Llama 3.3 70B (Groq)",
+    providerId: "groq",
+    capabilities: { supportsText: true, supportsVision: false, supportsAudio: false }
   },
   {
-    id: 'llama-3.1-8b-instant',
-    name: 'Llama 3.1 8B Instant (Groq LPU)',
-    providerId: 'groq',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 131072,
-      isLocal: false,
-      costPer1kTokens: 0.00008,
-    },
-    description: 'Model ultra cepat (>500 tps) tersedia untuk semua tier akun Groq.',
-    recommendedFor: ['story', 'dialogue', 'script', 'prompt-engineering'],
-  },
-  {
-    id: 'whisper-large-v3',
-    name: 'Whisper Large v3 (Groq LPU)',
-    providerId: 'groq',
-    capabilities: {
-      supportsText: false,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 0,
-      isLocal: false,
-    },
-    description: 'Speech-to-text akurasi tinggi ultra cepat bertenaga Groq LPU.',
-    recommendedFor: ['stt'],
-    isDefault: true,
+    id: "llama3-8b-8192",
+    name: "Llama 3 8B (Groq)",
+    providerId: "groq",
+    capabilities: { supportsText: true, supportsVision: false, supportsAudio: false }
   },
 
-  // --- OLLAMA (LOCAL) ---
+  // --- NVIDIA NIM ---
   {
-    id: 'llama3.2',
-    name: 'Llama 3.2 (Local Ollama)',
-    providerId: 'ollama',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: true,
-      maxContextTokens: 131072,
-      isLocal: true,
-      costPer1kTokens: 0.0,
-    },
-    description: 'Model lokal privasi penuh tanpa koneksi internet atau kuota API.',
-    recommendedFor: ['story', 'dialogue', 'prompt-engineering'],
-    isDefault: true,
+    id: "meta/llama-3.3-70b-instruct",
+    name: "Llama 3.3 70B (NVIDIA)",
+    providerId: "nvidia",
+    capabilities: { supportsText: true, supportsVision: false, supportsAudio: false }
   },
   {
-    id: 'qwen2.5',
-    name: 'Qwen 2.5 (Local Ollama)',
-    providerId: 'ollama',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 32768,
-      isLocal: true,
-      costPer1kTokens: 0.0,
-    },
-    description: 'Model lokal berkapabilitas instruksi dan penulisan cerita sangat kuat.',
-    recommendedFor: ['story', 'dialogue'],
+    id: "mistralai/mixtral-8x7b-instruct-v0.1",
+    name: "Mixtral 8x7B (NVIDIA)",
+    providerId: "nvidia",
+    capabilities: { supportsText: true, supportsVision: false, supportsAudio: false }
   },
 
-  // --- OPENROUTER ---
+  // --- CLOUDFLARE WORKERS AI ---
   {
-    id: 'deepseek/deepseek-r1',
-    name: 'DeepSeek R1 (OpenRouter)',
-    providerId: 'openrouter',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 163840,
-      isLocal: false,
-      costPer1kTokens: 0.00055,
-    },
-    description: 'Model open-reasoning SOTA dengan penalaran mendalam dan rantai pemikiran detail.',
-    recommendedFor: ['story', 'script', 'character-analysis'],
-    isDefault: true,
+    id: "@cf/meta/llama-3.1-8b-instruct",
+    name: "Llama 3.1 8B (CF)",
+    providerId: "cloudflare",
+    capabilities: { supportsText: true, supportsVision: false, supportsAudio: false }
   },
+
+  // --- OLLAMA CLOUD ---
   {
-    id: 'anthropic/claude-3.5-sonnet',
-    name: 'Claude 3.5 Sonnet (OpenRouter)',
-    providerId: 'openrouter',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: true,
-      maxContextTokens: 200000,
-      isLocal: false,
-      costPer1kTokens: 0.003,
-    },
-    description: 'Model terbaik untuk penulisan naskah sinematik, dialog berkarakter kuat, dan emosi natural.',
-    recommendedFor: ['story', 'script', 'dialogue', 'storyboard'],
-  },
-  {
-    id: 'meta-llama/llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B Instruct (OpenRouter)',
-    providerId: 'openrouter',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: false,
-      maxContextTokens: 131072,
-      isLocal: false,
-      costPer1kTokens: 0.0004,
-    },
-    description: 'Model open-weights performa tinggi untuk penulisan cepat dan prompt engineering.',
-    recommendedFor: ['dialogue', 'prompt-engineering'],
-  },
-  {
-    id: 'google/gemini-2.0-flash-001',
-    name: 'Gemini 2.0 Flash (OpenRouter)',
-    providerId: 'openrouter',
-    capabilities: {
-      supportsText: true,
-      supportsImageGen: false,
-      supportsVideoGen: false,
-      supportsAudioGen: false,
-      supportsVision: true,
-      maxContextTokens: 1048576,
-      isLocal: false,
-      costPer1kTokens: 0.0001,
-    },
-    description: 'Akses instan ke Gemini 2.0 Flash via OpenRouter unified gateway.',
-    recommendedFor: ['story', 'storyboard'],
-  },
+    id: "glm-5.3-flash:cloud", 
+    name: "GLM 5.3 Flash (Ollama Cloud)",
+    providerId: "ollama",
+    capabilities: { supportsText: true, supportsVision: false, supportsAudio: false }
+  }
 ];
