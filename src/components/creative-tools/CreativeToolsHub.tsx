@@ -188,7 +188,7 @@ export const CreativeToolsHub: React.FC<CreativeToolsHubProps> = ({
   const [prompt, setPrompt] = useState(currentTool.defaultPrompt);
   const [selectedStyleIndex, setSelectedStyleIndex] = useState(0);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(currentTool.defaultAspect);
-  const [selectedModel, setSelectedModel] = useState('imagen-3.0-generate-002');
+  const [selectedModel, setSelectedModel] = useState('@cf/black-forest-labs/flux-1-schnell');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
@@ -303,8 +303,9 @@ export const CreativeToolsHub: React.FC<CreativeToolsHubProps> = ({
             <Select
               label="Model Generator"
               options={[
-                { value: 'imagen-3.0-generate-002', label: 'Google Imagen 3 (Super Realism)' },
-                { value: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell (Fast Cloudflare)' },
+                { value: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell — Cloudflare GPU (Recommended / Instant)' },
+                { value: '@cf/stabilityai/stable-diffusion-xl-base-1.0', label: 'SDXL Base 1.0 — Cloudflare GPU' },
+                { value: 'imagen-3.0-generate-002', label: 'Google Imagen 3 (Perlu GCP Vertex Predict Access)' },
               ]}
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}

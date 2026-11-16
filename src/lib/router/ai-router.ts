@@ -106,7 +106,16 @@ export class AIRouter {
     }
 
     // Prioritize models explicitly recommended for this task
-    let selectedModel = candidateModels.find((m) => m.recommendedFor.includes(task));
+    let selectedModel: ModelDefinition | undefined;
+    if (task === 'image') {
+      // Prioritize Cloudflare FLUX.1 as it works instantly with standard edge tokens without Vertex requirements
+      selectedModel =
+        candidateModels.find((m) => m.id === '@cf/black-forest-labs/flux-1-schnell') ||
+        candidateModels.find((m) => m.capabilities.supportsImageGen);
+    } else {
+      selectedModel = candidateModels.find((m) => m.recommendedFor.includes(task));
+    }
+
     if (!selectedModel) {
       selectedModel = candidateModels[0];
     }

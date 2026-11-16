@@ -34,7 +34,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ projectId }) => {
     'blurry, deformed, bad anatomy, duplicate, low quality, oversaturated'
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
-  const [selectedModel, setSelectedModel] = useState('imagen-3.0-generate-002');
+  const [selectedModel, setSelectedModel] = useState('@cf/black-forest-labs/flux-1-schnell');
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Gallery of generated images
@@ -151,9 +151,9 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ projectId }) => {
             <Select
               label="Model & Provider AI"
               options={[
-                { value: 'imagen-3.0-generate-002', label: 'Google Imagen 3 (Highest Quality)' },
-                { value: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell (Cloudflare Edge)' },
-                { value: '@cf/stabilityai/stable-diffusion-xl-base-1.0', label: 'SDXL Base (Cloudflare)' },
+                { value: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell — Cloudflare GPU (Recommended / Instant)' },
+                { value: '@cf/stabilityai/stable-diffusion-xl-base-1.0', label: 'SDXL Base 1.0 — Cloudflare GPU' },
+                { value: 'imagen-3.0-generate-002', label: 'Google Imagen 3 (Perlu GCP Vertex Predict Access)' },
               ]}
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
