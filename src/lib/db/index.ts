@@ -63,10 +63,16 @@ export interface NeoStudioDBSchema extends DBSchema {
       updatedAt: number;
     };
   };
+  // Dynamic model catalog populated by model discovery.
+  // `any` keeps this DB boundary compatible with the provider-specific model metadata.
+  discovered_models: {
+    key: string;
+    value: any;
+  };
 }
 
 const DB_NAME = 'neo_studio_ai_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<NeoStudioDBSchema>> | null = null;
 
@@ -125,6 +131,12 @@ export function getDB(): Promise<IDBPDatabase<NeoStudioDBSchema>> {
         // Settings Store
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' });
+        }
+
+        // Discovered Models Store (added in DB version 2).
+        // Existing stores and user data are preserved during this upgrade.
+        if (!db.objectStoreNames.contains('discovered_models')) {
+          db.createObjectStore('discovered_models', { keyPath: 'id' });
         }
       },
       blocked() {
