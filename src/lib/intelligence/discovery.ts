@@ -559,7 +559,7 @@ export class ModelDiscoveryEngine {
   private static getGeminiFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'gemini-2.0-flash',
+        id: 'gemini-2.5-flash',
         name: 'Gemini 2.0 Flash',
         provider: 'gemini',
         description: 'Generasi tercepat multimodal dengan reasoning tinggi dan latency sangat rendah.',
@@ -648,7 +648,7 @@ export class ModelDiscoveryEngine {
   private static getGroqFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'llama-3.1-8b-instant',
+        id: 'llama3-8b-8192',
         name: 'Llama 3.1 8B Instant',
         provider: 'groq',
         description: 'Model ultra cepat (>500 tps) bertenaga Groq LPU, tersedia untuk semua tier akun.',
@@ -763,7 +763,7 @@ export class ModelDiscoveryEngine {
   private static getNvidiaFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'meta/llama-3.1-70b-instruct',
+        id: 'meta/llama-3.3-70b-instruct',
         name: 'Llama 3.1 70B Instruct (NVIDIA NIM)',
         provider: 'nvidia',
         description: 'Model enterprise di-host dengan akselerasi TensorRT-LLM NVIDIA.',

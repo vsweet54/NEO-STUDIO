@@ -7,7 +7,7 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     name: 'Google Gemini API',
     enabled: true,
     status: 'unconfigured',
-    defaultTextModel: 'gemini-2.0-flash',
+    defaultTextModel: 'gemini-2.5-flash',
     defaultImageModel: 'imagen-3.0-generate-002',
     defaultVideoModel: 'veo-2.0-generate-001',
   },
@@ -17,7 +17,7 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     enabled: true,
     status: 'unconfigured',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    defaultTextModel: 'meta/llama-3.1-70b-instruct',
+    defaultTextModel: 'meta/llama-3.3-70b-instruct',
   },
   {
     id: 'cloudflare',
@@ -56,11 +56,11 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
 const DEFAULT_ROUTER: RouterConfig = {
   mode: 'auto',
   manualAssignments: {
-    story: { providerId: 'gemini', modelId: 'gemini-2.0-flash' },
-    script: { providerId: 'gemini', modelId: 'gemini-2.0-flash' },
-    storyboard: { providerId: 'gemini', modelId: 'gemini-2.0-flash' },
+    story: { providerId: 'gemini', modelId: 'gemini-2.5-flash' },
+    script: { providerId: 'gemini', modelId: 'gemini-2.5-flash' },
+    storyboard: { providerId: 'gemini', modelId: 'gemini-2.5-flash' },
     dialogue: { providerId: 'groq', modelId: 'llama-3.3-70b-versatile' },
-    'character-analysis': { providerId: 'nvidia', modelId: 'meta/llama-3.1-70b-instruct' },
+    'character-analysis': { providerId: 'nvidia', modelId: 'meta/llama-3.3-70b-instruct' },
     'prompt-engineering': { providerId: 'groq', modelId: 'llama-3.3-70b-versatile' },
     image: { providerId: 'gemini', modelId: 'imagen-3.0-generate-002' },
     video: { providerId: 'gemini', modelId: 'veo-2.0-generate-001' },

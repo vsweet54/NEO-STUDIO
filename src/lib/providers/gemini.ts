@@ -52,7 +52,7 @@ export class GeminiAdapter {
     options: TextGenerationOptions
   ): Promise<ProviderExecutionResult<{ text: string; rawResponse?: any }>> {
     const start = Date.now();
-    const model = options.model || 'gemini-2.0-flash';
+    const model = options.model || 'gemini-2.5-flash';
 
     try {
       const bodyPayload: any = {

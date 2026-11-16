@@ -173,7 +173,7 @@ export class ModelSpecializationEngine {
         const coder = candidateModels.find((m) => m.id.includes('claude') || m.id.includes('qwen') || m.id.includes('coder') || m.id.includes('deepseek'));
         if (coder) primary = coder.id;
       } else if (spec.task === 'storyboard' || spec.task === 'general-chat') {
-        const geminiFlash = candidateModels.find((m) => m.id === 'gemini-2.0-flash');
+        const geminiFlash = candidateModels.find((m) => m.id === 'gemini-2.5-flash');
         if (geminiFlash) primary = geminiFlash.id;
       }
 
