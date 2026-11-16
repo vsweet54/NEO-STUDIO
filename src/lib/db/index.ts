@@ -63,10 +63,32 @@ export interface NeoStudioDBSchema extends DBSchema {
       updatedAt: number;
     };
   };
+  discovered_models: {
+    key: string;
+    value: import('@/types/model-intelligence').DiscoveredModel;
+    indexes: {
+      'by-provider': string;
+      'by-pricing': string;
+      'by-status': string;
+    };
+  };
+  test_history: {
+    key: string;
+    value: import('@/types/model-intelligence').ModelTestRecord;
+    indexes: {
+      'by-model': string;
+      'by-status': string;
+      'by-timestamp': number;
+    };
+  };
+  specializations: {
+    key: string;
+    value: import('@/types/model-intelligence').TaskSpecializationConfig;
+  };
 }
 
 const DB_NAME = 'neo_studio_ai_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<NeoStudioDBSchema>> | null = null;
 
@@ -77,7 +99,7 @@ export function getDB(): Promise<IDBPDatabase<NeoStudioDBSchema>> {
 
   if (!dbPromise) {
     dbPromise = openDB<NeoStudioDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
         // Projects Store
         if (!db.objectStoreNames.contains('projects')) {
           const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
@@ -125,6 +147,27 @@ export function getDB(): Promise<IDBPDatabase<NeoStudioDBSchema>> {
         // Settings Store
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' });
+        }
+
+        // Discovered Models Store (v2)
+        if (!db.objectStoreNames.contains('discovered_models')) {
+          const modelStore = db.createObjectStore('discovered_models', { keyPath: 'id' });
+          modelStore.createIndex('by-provider', 'provider');
+          modelStore.createIndex('by-pricing', 'pricing.classification');
+          modelStore.createIndex('by-status', 'testStatus');
+        }
+
+        // Test History Store (v2)
+        if (!db.objectStoreNames.contains('test_history')) {
+          const testStore = db.createObjectStore('test_history', { keyPath: 'id' });
+          testStore.createIndex('by-model', 'modelId');
+          testStore.createIndex('by-status', 'result');
+          testStore.createIndex('by-timestamp', 'timestamp');
+        }
+
+        // Task Specializations Store (v2)
+        if (!db.objectStoreNames.contains('specializations')) {
+          db.createObjectStore('specializations', { keyPath: 'task' });
         }
       },
       blocked() {

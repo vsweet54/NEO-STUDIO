@@ -49,7 +49,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center gap-2">
           <Badge variant="purple" size="sm" className="hidden sm:inline-flex font-mono">
-            v1.0.0 PRODUCTION
+            v1.0.0
+          </Badge>
+          <Badge variant="cyan" size="sm" className="hidden sm:inline-flex font-mono">
+            by xyrons
           </Badge>
           {currentProjectTitle && (
             <span className="text-sm font-semibold text-gray-200 truncate max-w-[200px] sm:max-w-xs">
