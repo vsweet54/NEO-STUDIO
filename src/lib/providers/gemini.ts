@@ -102,6 +102,17 @@ export class GeminiAdapter {
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         const msg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+
+        // Auto-migrate retired/deprecated models (e.g. gemini-2.5-flash -> gemini-3.1-flash-lite)
+        if (
+          (msg.includes('no longer available') || msg.includes('not found') || msg.includes('models/')) &&
+          model !== 'gemini-3.1-flash-lite' &&
+          model !== 'gemini-2.0-flash'
+        ) {
+          console.warn(`[Gemini] Model ${model} is not available (${msg}). Auto-migrating to gemini-3.1-flash-lite...`);
+          return this.generateText(apiKey, { ...options, model: 'gemini-3.1-flash-lite' });
+        }
+
         return {
           success: false,
           error: `Gemini API Error: ${msg}`,

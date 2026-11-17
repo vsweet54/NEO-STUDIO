@@ -3,6 +3,24 @@ import { ModelDefinition } from '@/types/provider';
 export const VERIFIED_MODELS: ModelDefinition[] = [
   // --- GOOGLE GEMINI ---
   {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    providerId: 'gemini',
+    capabilities: {
+      supportsText: true,
+      supportsImageGen: false,
+      supportsVideoGen: false,
+      supportsAudioGen: false,
+      supportsVision: true,
+      maxContextTokens: 1048576,
+      isLocal: false,
+      costPer1kTokens: 0.00008,
+    },
+    description: 'Generasi terbaru Google AI Studio dengan latensi ultra rendah dan skor benchmark 98/100.',
+    recommendedFor: ['story', 'script', 'storyboard', 'dialogue', 'character-analysis'],
+    isDefault: true,
+  },
+  {
     id: 'gemini-2.0-flash',
     name: 'Gemini 2.0 Flash',
     providerId: 'gemini',
@@ -16,9 +34,9 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
       isLocal: false,
       costPer1kTokens: 0.0001,
     },
-    description: 'Generasi tercepat multimodal dengan reasoning tinggi dan latency sangat rendah.',
+    description: 'Generasi cepat multimodal dengan reasoning tinggi dan latency sangat rendah.',
     recommendedFor: ['story', 'script', 'storyboard', 'dialogue', 'character-analysis'],
-    isDefault: true,
+    isDefault: false,
   },
   {
     id: 'gemini-1.5-pro',
