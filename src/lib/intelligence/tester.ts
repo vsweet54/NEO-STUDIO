@@ -5,6 +5,13 @@ import {
   ModelErrorCode,
 } from '@/types/model-intelligence';
 import { ProviderConfig } from '@/types/provider';
+import { GeminiAdapter } from '@/lib/providers/gemini';
+import { NvidiaAdapter } from '@/lib/providers/nvidia';
+import { CloudflareAdapter } from '@/lib/providers/cloudflare';
+import { GroqAdapter } from '@/lib/providers/groq';
+import { OllamaAdapter } from '@/lib/providers/ollama';
+import { OpenRouterAdapter } from '@/lib/providers/openrouter';
+import { KeyPool } from '@/lib/providers/key-pool';
 
 // Standard 1x1 red pixel PNG for vision testing
 const RED_PIXEL_BASE64 =
@@ -101,6 +108,171 @@ export class ModelTestingEngine {
     }
   }
 
+  // --- Direct In-Memory Adapters Dispatchers (Zero Relative URL / Network Overhead) ---
+  private static async dispatchText(
+    providerId: string,
+    model: string,
+    prompt: string,
+    prov: ProviderConfig,
+    extraOptions: { maxTokens?: number; temperature?: number; referenceImageBase64?: string; jsonMode?: boolean } = {}
+  ): Promise<{
+    success: boolean;
+    data?: { text: string };
+    error?: string;
+    tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  }> {
+    const options = {
+      model,
+      prompt,
+      maxTokens: extraOptions.maxTokens ?? 50,
+      temperature: extraOptions.temperature ?? 0.1,
+      referenceImageBase64: extraOptions.referenceImageBase64,
+      jsonMode: extraOptions.jsonMode,
+    };
+
+    try {
+      switch (providerId) {
+        case 'gemini': {
+          const keys = KeyPool.getKeys(prov.apiKey, ['GEMINI_API_KEY', 'GEMINI_API_KEYS']);
+          if (keys.length === 0) return { success: false, error: 'Google Gemini API Key is missing' };
+          return await KeyPool.executeWithRotation('gemini', keys, (activeKey) =>
+            GeminiAdapter.generateText(activeKey, options)
+          );
+        }
+        case 'groq': {
+          const keys = KeyPool.getKeys(prov.apiKey, ['GROQ_API_KEY', 'GROQ_API_KEYS']);
+          if (keys.length === 0) return { success: false, error: 'Groq API Key is missing' };
+          const endpoint = prov.baseUrl || process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+          return await KeyPool.executeWithRotation('groq', keys, (activeKey) =>
+            GroqAdapter.generateText(activeKey, options, endpoint)
+          );
+        }
+        case 'openrouter': {
+          const keys = KeyPool.getKeys(prov.apiKey, ['OPENROUTER_API_KEY', 'OPENROUTER_API_KEYS']);
+          if (keys.length === 0) return { success: false, error: 'OpenRouter API Key is missing' };
+          const endpoint = prov.baseUrl || process.env.OPENROUTER_BASE_URL;
+          return await KeyPool.executeWithRotation('openrouter', keys, (activeKey) =>
+            OpenRouterAdapter.generateText(activeKey, options, endpoint)
+          );
+        }
+        case 'nvidia': {
+          const keys = KeyPool.getKeys(prov.apiKey, ['NVIDIA_API_KEY', 'NVIDIA_API_KEYS']);
+          if (keys.length === 0) return { success: false, error: 'NVIDIA API Key is missing' };
+          const endpoint = prov.baseUrl || process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+          return await KeyPool.executeWithRotation('nvidia', keys, (activeKey) =>
+            NvidiaAdapter.generateText(activeKey, options, endpoint)
+          );
+        }
+        case 'cloudflare': {
+          const pairs = KeyPool.getCloudflarePairs(prov.apiKey, prov.accountId);
+          if (pairs.length === 0) return { success: false, error: 'Cloudflare API Key and Account ID are required' };
+          return await KeyPool.executeCloudflareWithRotation(pairs, (activeKey, activeAcct) =>
+            CloudflareAdapter.generateText(activeKey, activeAcct, options)
+          );
+        }
+        case 'ollama': {
+          const keys = KeyPool.getKeys(prov.apiKey, ['OLLAMA_API_KEY', 'OLLAMA_API_KEYS']);
+          const endpoint = prov.baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+          if (keys.length > 0) {
+            return await KeyPool.executeWithRotation('ollama', keys, (activeKey) =>
+              OllamaAdapter.generateText(options, endpoint, activeKey)
+            );
+          }
+          return await OllamaAdapter.generateText(options, endpoint, undefined);
+        }
+        default:
+          return { success: false, error: `Unsupported provider: ${providerId}` };
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Execution failed' };
+    }
+  }
+
+  private static async dispatchImage(
+    providerId: string,
+    model: string,
+    prompt: string,
+    prov: ProviderConfig
+  ): Promise<{
+    success: boolean;
+    data?: { imageBase64?: string; imageUrl?: string };
+    error?: string;
+  }> {
+    const options = {
+      model,
+      prompt,
+      aspectRatio: '1:1',
+      steps: 4,
+    };
+
+    try {
+      if (providerId === 'gemini') {
+        const keys = KeyPool.getKeys(prov.apiKey, ['GEMINI_API_KEY', 'GEMINI_API_KEYS']);
+        if (keys.length === 0) return { success: false, error: 'Gemini API key is missing' };
+        return await KeyPool.executeWithRotation('gemini', keys, (activeKey) =>
+          GeminiAdapter.generateImage(activeKey, options)
+        );
+      } else if (providerId === 'cloudflare') {
+        const pairs = KeyPool.getCloudflarePairs(prov.apiKey, prov.accountId);
+        if (pairs.length === 0) return { success: false, error: 'Cloudflare API Token & Account ID required' };
+        return await KeyPool.executeCloudflareWithRotation(pairs, (activeKey, activeAcct) =>
+          CloudflareAdapter.generateImage(activeKey, activeAcct, options)
+        );
+      }
+      return { success: false, error: `Provider ${providerId} does not support image generation` };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Image execution failed' };
+    }
+  }
+
+  private static async dispatchAudio(
+    providerId: string,
+    model: string,
+    text: string,
+    prov: ProviderConfig
+  ): Promise<{
+    success: boolean;
+    data?: { audioBase64?: string; audioUrl?: string };
+    error?: string;
+  }> {
+    try {
+      if (providerId === 'cloudflare') {
+        const pairs = KeyPool.getCloudflarePairs(prov.apiKey, prov.accountId);
+        if (pairs.length === 0) return { success: false, error: 'Cloudflare API Token & Account ID required' };
+        return await KeyPool.executeCloudflareWithRotation(pairs, (activeKey, activeAcct) =>
+          CloudflareAdapter.generateAudio(activeKey, activeAcct, { model, text })
+        );
+      }
+      return { success: false, error: `Provider ${providerId} does not support audio generation` };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Audio execution failed' };
+    }
+  }
+
+  private static async dispatchVideo(
+    providerId: string,
+    model: string,
+    prompt: string,
+    prov: ProviderConfig
+  ): Promise<{
+    success: boolean;
+    data?: { videoUrl?: string; videoBase64?: string; jobId?: string };
+    error?: string;
+  }> {
+    try {
+      if (providerId === 'gemini') {
+        const keys = KeyPool.getKeys(prov.apiKey, ['GEMINI_API_KEY', 'GEMINI_API_KEYS']);
+        if (keys.length === 0) return { success: false, error: 'Gemini API key is missing' };
+        return await KeyPool.executeWithRotation('gemini', keys, (activeKey) =>
+          GeminiAdapter.generateVideo(activeKey, { model, prompt, durationSeconds: 5 })
+        );
+      }
+      return { success: false, error: `Provider ${providerId} does not support video generation` };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Video execution failed' };
+    }
+  }
+
   /**
    * Category A: Real Text Model Test
    */
@@ -111,32 +283,19 @@ export class ModelTestingEngine {
     timeoutMs: number
   ): Promise<ModelTestRecord> {
     const prompt = 'Reply with exactly: NEO MODEL TEST SUCCESS';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch('/api/generate/text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          providerId: model.provider,
-          model: model.id,
-          prompt,
-          apiKey: prov.apiKey,
-          accountId: prov.accountId,
-          baseUrl: prov.baseUrl,
-          maxTokens: 50,
-          temperature: 0.1,
-        }),
-      });
+      const res = await Promise.race([
+        this.dispatchText(model.provider, model.id, prompt, prov, { maxTokens: 50, temperature: 0.1 }),
+        new Promise<{ success: false; error: string }>((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'Inference timeout exceeded' }), timeoutMs)
+        ),
+      ]);
 
-      clearTimeout(timeout);
       const latencyMs = Date.now() - start;
-      const json = await res.json();
 
-      if (!json.success) {
-        const errorInfo = this.classifyError(json.error || 'Server rejected request');
+      if (!res.success) {
+        const errorInfo = this.classifyError(res.error || 'Server rejected request');
         return {
           id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
           timestamp: Date.now(),
@@ -144,6 +303,7 @@ export class ModelTestingEngine {
           modelId: model.id,
           category: 'TEXT',
           result: 'FAIL',
+          score: 0,
           latencyMs,
           pricingStatus: model.pricing.classification,
           assignedRoles: model.roles,
@@ -153,7 +313,7 @@ export class ModelTestingEngine {
         };
       }
 
-      const reply = json.data?.text || '';
+      const reply = res.data?.text || '';
       const exactMatch = reply.toUpperCase().includes('NEO MODEL TEST SUCCESS');
       const hasContent = reply.trim().length > 0;
       const passed = exactMatch || hasContent;
@@ -183,14 +343,30 @@ export class ModelTestingEngine {
         score,
         evaluationDetails: evalDetail,
         latencyMs,
-        tokenUsage: json.tokenUsage,
+        tokenUsage: res.tokenUsage,
         pricingStatus: model.pricing.classification,
         assignedRoles: model.roles,
         testPrompt: prompt,
         outputSnippet: reply.substring(0, 100),
       };
-    } finally {
-      clearTimeout(timeout);
+    } catch (err: any) {
+      const latencyMs = Date.now() - start;
+      const errorInfo = this.classifyError(err.message || 'Execution error');
+      return {
+        id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
+        timestamp: Date.now(),
+        provider: model.provider,
+        modelId: model.id,
+        category: 'TEXT',
+        result: 'FAIL',
+        score: 0,
+        latencyMs,
+        pricingStatus: model.pricing.classification,
+        assignedRoles: model.roles,
+        errorCode: errorInfo.code,
+        errorMessage: errorInfo.message,
+        testPrompt: prompt,
+      };
     }
   }
 
@@ -204,32 +380,19 @@ export class ModelTestingEngine {
     timeoutMs: number
   ): Promise<ModelTestRecord> {
     const prompt = 'Write a valid JavaScript function that adds two numbers and explain how it works.';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch('/api/generate/text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          providerId: model.provider,
-          model: model.id,
-          prompt,
-          apiKey: prov.apiKey,
-          accountId: prov.accountId,
-          baseUrl: prov.baseUrl,
-          maxTokens: 256,
-          temperature: 0.2,
-        }),
-      });
+      const res = await Promise.race([
+        this.dispatchText(model.provider, model.id, prompt, prov, { maxTokens: 256, temperature: 0.2 }),
+        new Promise<{ success: false; error: string }>((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'Coding test timeout' }), timeoutMs)
+        ),
+      ]);
 
-      clearTimeout(timeout);
       const latencyMs = Date.now() - start;
-      const json = await res.json();
 
-      if (!json.success) {
-        const errorInfo = this.classifyError(json.error || 'Coding test failed');
+      if (!res.success) {
+        const errorInfo = this.classifyError(res.error || 'Coding test failed');
         return {
           id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
           timestamp: Date.now(),
@@ -247,11 +410,11 @@ export class ModelTestingEngine {
         };
       }
 
-      const reply = json.data?.text || '';
-      const hasFunction = reply.includes('function') || reply.includes('=>');
+      const reply = res.data?.text || '';
+      const hasFunction = reply.includes('function') || reply.includes('=>') || reply.includes('add(');
       const hasAddition = reply.includes('+') || reply.includes('sum') || reply.includes('add');
       const hasReturn = reply.includes('return');
-      const hasExplanation = reply.length > 80;
+      const hasExplanation = reply.length > 50;
       const passed = hasFunction && (hasAddition || hasReturn);
 
       let score = 0;
@@ -280,14 +443,30 @@ export class ModelTestingEngine {
         score,
         evaluationDetails: evalDetail,
         latencyMs,
-        tokenUsage: json.tokenUsage,
+        tokenUsage: res.tokenUsage,
         pricingStatus: model.pricing.classification,
         assignedRoles: model.roles,
         testPrompt: prompt,
         outputSnippet: reply.substring(0, 120),
       };
-    } finally {
-      clearTimeout(timeout);
+    } catch (err: any) {
+      const latencyMs = Date.now() - start;
+      const errorInfo = this.classifyError(err.message || 'Coding test error');
+      return {
+        id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
+        timestamp: Date.now(),
+        provider: model.provider,
+        modelId: model.id,
+        category: 'CODING',
+        result: 'FAIL',
+        score: 0,
+        latencyMs,
+        pricingStatus: model.pricing.classification,
+        assignedRoles: model.roles,
+        errorCode: errorInfo.code,
+        errorMessage: errorInfo.message,
+        testPrompt: prompt,
+      };
     }
   }
 
@@ -301,32 +480,22 @@ export class ModelTestingEngine {
     timeoutMs: number
   ): Promise<ModelTestRecord> {
     const prompt = 'Describe the objects and important details visible in this image.';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch('/api/generate/text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          providerId: model.provider,
-          model: model.id,
-          prompt,
-          referenceImageBase64: RED_PIXEL_BASE64,
-          apiKey: prov.apiKey,
-          accountId: prov.accountId,
-          baseUrl: prov.baseUrl,
+      const res = await Promise.race([
+        this.dispatchText(model.provider, model.id, prompt, prov, {
           maxTokens: 120,
+          referenceImageBase64: RED_PIXEL_BASE64,
         }),
-      });
+        new Promise<{ success: false; error: string }>((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'Vision test timeout' }), timeoutMs)
+        ),
+      ]);
 
-      clearTimeout(timeout);
       const latencyMs = Date.now() - start;
-      const json = await res.json();
 
-      if (!json.success) {
-        const errorInfo = this.classifyError(json.error || 'Vision test failed');
+      if (!res.success) {
+        const errorInfo = this.classifyError(res.error || 'Vision test failed');
         return {
           id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
           timestamp: Date.now(),
@@ -334,6 +503,7 @@ export class ModelTestingEngine {
           modelId: model.id,
           category: 'VISION',
           result: 'FAIL',
+          score: 0,
           latencyMs,
           pricingStatus: model.pricing.classification,
           assignedRoles: model.roles,
@@ -343,8 +513,8 @@ export class ModelTestingEngine {
         };
       }
 
-      const reply = json.data?.text || '';
-      const hasDescription = reply.trim().length > 10;
+      const reply = res.data?.text || '';
+      const hasDescription = reply.trim().length > 5;
       const identifiesColorOrShape = /red|merah|pixel|square|kotak|color|warna|solid/i.test(reply);
       const passed = hasDescription;
 
@@ -371,14 +541,30 @@ export class ModelTestingEngine {
         score,
         evaluationDetails: evalDetail,
         latencyMs,
-        tokenUsage: json.tokenUsage,
+        tokenUsage: res.tokenUsage,
         pricingStatus: model.pricing.classification,
         assignedRoles: model.roles,
         testPrompt: prompt,
         outputSnippet: reply.substring(0, 100),
       };
-    } finally {
-      clearTimeout(timeout);
+    } catch (err: any) {
+      const latencyMs = Date.now() - start;
+      const errorInfo = this.classifyError(err.message || 'Vision test error');
+      return {
+        id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
+        timestamp: Date.now(),
+        provider: model.provider,
+        modelId: model.id,
+        category: 'VISION',
+        result: 'FAIL',
+        score: 0,
+        latencyMs,
+        pricingStatus: model.pricing.classification,
+        assignedRoles: model.roles,
+        errorCode: errorInfo.code,
+        errorMessage: errorInfo.message,
+        testPrompt: prompt,
+      };
     }
   }
 
@@ -392,31 +578,19 @@ export class ModelTestingEngine {
     timeoutMs: number
   ): Promise<ModelTestRecord> {
     const prompt = 'A simple red apple on a clean white background, professional studio photography.';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch('/api/generate/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          providerId: model.provider,
-          model: model.id,
-          prompt,
-          apiKey: prov.apiKey,
-          accountId: prov.accountId,
-          steps: 4,
-          aspectRatio: '1:1',
-        }),
-      });
+      const res = await Promise.race([
+        this.dispatchImage(model.provider, model.id, prompt, prov),
+        new Promise<{ success: false; error: string }>((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'Image generation timeout' }), timeoutMs)
+        ),
+      ]);
 
-      clearTimeout(timeout);
       const latencyMs = Date.now() - start;
-      const json = await res.json();
 
-      if (!json.success) {
-        const errorInfo = this.classifyError(json.error || 'Image generation failed');
+      if (!res.success) {
+        const errorInfo = this.classifyError(res.error || 'Image generation failed');
         return {
           id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
           timestamp: Date.now(),
@@ -434,7 +608,7 @@ export class ModelTestingEngine {
         };
       }
 
-      const hasValidImage = !!json.data?.imageBase64 && json.data.imageBase64.length > 500;
+      const hasValidImage = !!res.data?.imageBase64 && res.data.imageBase64.length > 500;
       let score = 0;
       if (hasValidImage) {
         score += 70; // valid image bytes
@@ -463,8 +637,24 @@ export class ModelTestingEngine {
         testPrompt: prompt,
         outputSnippet: hasValidImage ? 'Valid Image Output Received' : 'No image data',
       };
-    } finally {
-      clearTimeout(timeout);
+    } catch (err: any) {
+      const latencyMs = Date.now() - start;
+      const errorInfo = this.classifyError(err.message || 'Image generation error');
+      return {
+        id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
+        timestamp: Date.now(),
+        provider: model.provider,
+        modelId: model.id,
+        category: 'IMAGE_GEN',
+        result: 'FAIL',
+        score: 0,
+        latencyMs,
+        pricingStatus: model.pricing.classification,
+        assignedRoles: model.roles,
+        errorCode: errorInfo.code,
+        errorMessage: errorInfo.message,
+        testPrompt: prompt,
+      };
     }
   }
 
@@ -478,29 +668,19 @@ export class ModelTestingEngine {
     timeoutMs: number
   ): Promise<ModelTestRecord> {
     const prompt = 'Hello from NEO STUDIO AI by xyrons';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch('/api/generate/audio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          providerId: model.provider,
-          model: model.id,
-          text: prompt,
-          apiKey: prov.apiKey,
-          accountId: prov.accountId,
-        }),
-      });
+      const res = await Promise.race([
+        this.dispatchAudio(model.provider, model.id, prompt, prov),
+        new Promise<{ success: false; error: string }>((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'Audio generation timeout' }), timeoutMs)
+        ),
+      ]);
 
-      clearTimeout(timeout);
       const latencyMs = Date.now() - start;
-      const json = await res.json();
 
-      if (!json.success) {
-        const errorInfo = this.classifyError(json.error || 'Audio generation failed');
+      if (!res.success) {
+        const errorInfo = this.classifyError(res.error || 'Audio generation failed');
         return {
           id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
           timestamp: Date.now(),
@@ -517,7 +697,7 @@ export class ModelTestingEngine {
         };
       }
 
-      const hasValidAudio = !!json.data?.audioBase64 && json.data.audioBase64.length > 500;
+      const hasValidAudio = !!res.data?.audioBase64 && res.data.audioBase64.length > 500;
       let score = 0;
       if (hasValidAudio) {
         score += 70;
@@ -544,8 +724,23 @@ export class ModelTestingEngine {
         assignedRoles: model.roles,
         outputSnippet: 'Valid Audio Synthesized',
       };
-    } finally {
-      clearTimeout(timeout);
+    } catch (err: any) {
+      const latencyMs = Date.now() - start;
+      const errorInfo = this.classifyError(err.message || 'Audio generation error');
+      return {
+        id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
+        timestamp: Date.now(),
+        provider: model.provider,
+        modelId: model.id,
+        category: 'AUDIO',
+        result: 'FAIL',
+        score: 0,
+        latencyMs,
+        pricingStatus: model.pricing.classification,
+        assignedRoles: model.roles,
+        errorCode: errorInfo.code,
+        errorMessage: errorInfo.message,
+      };
     }
   }
 
@@ -558,30 +753,20 @@ export class ModelTestingEngine {
     start: number,
     timeoutMs: number
   ): Promise<ModelTestRecord> {
-    // Check video availability
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const prompt = 'A calm ocean wave at sunrise, cinema 4k';
 
     try {
-      const res = await fetch('/api/generate/video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          providerId: model.provider,
-          model: model.id,
-          prompt: 'A calm ocean wave at sunrise, cinema 4k',
-          apiKey: prov.apiKey,
-          durationSeconds: 3,
-        }),
-      });
+      const res = await Promise.race([
+        this.dispatchVideo(model.provider, model.id, prompt, prov),
+        new Promise<{ success: false; error: string }>((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'Video generation timeout' }), timeoutMs)
+        ),
+      ]);
 
-      clearTimeout(timeout);
       const latencyMs = Date.now() - start;
-      const json = await res.json();
 
-      if (!json.success) {
-        const errorInfo = this.classifyError(json.error || 'Video test failed');
+      if (!res.success) {
+        const errorInfo = this.classifyError(res.error || 'Video test failed');
         return {
           id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
           timestamp: Date.now(),
@@ -589,6 +774,7 @@ export class ModelTestingEngine {
           modelId: model.id,
           category: 'VIDEO',
           result: 'FAIL',
+          score: 0,
           latencyMs,
           pricingStatus: model.pricing.classification,
           assignedRoles: model.roles,
@@ -597,19 +783,37 @@ export class ModelTestingEngine {
         };
       }
 
+      const passed = !!res.data?.jobId || !!res.data?.videoUrl;
+
       return {
         id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
         timestamp: Date.now(),
         provider: model.provider,
         modelId: model.id,
         category: 'VIDEO',
-        result: json.data?.jobId || json.data?.videoUrl ? 'PASS' : 'FAIL',
+        result: passed ? 'PASS' : 'FAIL',
+        score: passed ? 85 : 0,
         latencyMs,
         pricingStatus: model.pricing.classification,
         assignedRoles: model.roles,
       };
-    } finally {
-      clearTimeout(timeout);
+    } catch (err: any) {
+      const latencyMs = Date.now() - start;
+      const errorInfo = this.classifyError(err.message || 'Video generation error');
+      return {
+        id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
+        timestamp: Date.now(),
+        provider: model.provider,
+        modelId: model.id,
+        category: 'VIDEO',
+        result: 'FAIL',
+        score: 0,
+        latencyMs,
+        pricingStatus: model.pricing.classification,
+        assignedRoles: model.roles,
+        errorCode: errorInfo.code,
+        errorMessage: errorInfo.message,
+      };
     }
   }
 

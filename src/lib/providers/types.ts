@@ -7,6 +7,7 @@ export interface TextGenerationOptions {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  referenceImageBase64?: string;
 }
 
 export interface ImageGenerationOptions {

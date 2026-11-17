@@ -81,7 +81,21 @@ export class OpenRouterAdapter {
       if (options.systemPrompt) {
         messages.push({ role: 'system', content: options.systemPrompt });
       }
-      messages.push({ role: 'user', content: options.prompt });
+
+      if (options.referenceImageBase64) {
+        const imgUrl = options.referenceImageBase64.startsWith('data:')
+          ? options.referenceImageBase64
+          : `data:image/png;base64,${options.referenceImageBase64}`;
+        messages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: options.prompt },
+            { type: 'image_url', image_url: { url: imgUrl } },
+          ],
+        });
+      } else {
+        messages.push({ role: 'user', content: options.prompt });
+      }
 
       const payload: any = {
         model,

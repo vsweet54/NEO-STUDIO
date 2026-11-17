@@ -55,10 +55,21 @@ export class GeminiAdapter {
     const model = options.model || 'gemini-2.0-flash';
 
     try {
+      const parts: any[] = [{ text: options.prompt }];
+      if (options.referenceImageBase64) {
+        const cleanBase64 = options.referenceImageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+        parts.unshift({
+          inline_data: {
+            mime_type: 'image/png',
+            data: cleanBase64,
+          },
+        });
+      }
+
       const bodyPayload: any = {
         contents: [
           {
-            parts: [{ text: options.prompt }],
+            parts,
           },
         ],
         generationConfig: {
