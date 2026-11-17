@@ -153,12 +153,26 @@ export class CloudflareAdapter {
         height = 800;
       }
 
-      const payload: any = {
-        prompt: options.prompt,
-        num_steps: options.steps || 4,
-        width,
-        height,
-      };
+      // Cloudflare FLUX.1 Schnell strictly validates schema and ONLY accepts { prompt, steps }
+      // Passing 'num_steps', 'width', or 'height' triggers Cloudflare AiError: "Additional or unevaluated properties not allowed"
+      const isFlux = model.includes('flux');
+      let payload: any;
+
+      if (isFlux) {
+        payload = {
+          prompt: options.prompt,
+          steps: options.steps && options.steps <= 8 ? options.steps : 4,
+        };
+      } else {
+        // SDXL (@cf/stabilityai/stable-diffusion-xl-base-1.0)
+        payload = {
+          prompt: options.prompt,
+          negative_prompt: options.negativePrompt,
+          width,
+          height,
+          num_steps: Math.min(options.steps || 20, 20),
+        };
+      }
 
       const res = await fetch(
         `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${model}`,

@@ -266,7 +266,7 @@ export class GeminiAdapter {
         const msg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
         return {
           success: false,
-          error: `Google Veo Error: ${msg}. Pastikan project GCP / API Key Anda memiliki akses ke model Veo preview.`,
+          error: `Google Veo Error: Model video Google Veo 2 belum tersedia di akun/API Key gratisan Google AI Studio (memerlukan whitelist Google Cloud Vertex AI berbayar). Untuk pengguna gratis, gunakan fitur Storyboard, Foto FLUX.1, Character Sheet, & Voice-Over.`,
           durationMs,
         };
       }
