@@ -165,7 +165,10 @@ export class AIRouter {
     if (task === 'image') {
       // Prioritize available configured image model
       const cfConfigured = enabledProviders.some(
-        (p) => p.id === 'cloudflare' && (p.apiKey || process.env.CLOUDFLARE_API_KEY) && (p.accountId || process.env.CLOUDFLARE_ACCOUNT_ID)
+        (p) =>
+          p.id === 'cloudflare' &&
+          (p.apiKey || process.env.CLOUDFLARE_API_KEY || process.env.CLOUDFLARE_API_TOKEN || process.env.CLOUDFIRE_API_KEY) &&
+          (p.accountId || process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CLOUDFIRE_ACCOUNT_ID)
       );
       const geminiConfigured = enabledProviders.some(
         (p) => p.id === 'gemini' && (p.apiKey || process.env.GEMINI_API_KEY)

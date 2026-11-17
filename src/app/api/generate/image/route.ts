@@ -45,6 +45,20 @@ export async function POST(req: NextRequest) {
         result = await KeyPool.executeWithRotation('gemini', keys, (activeKey) =>
           GeminiAdapter.generateImage(activeKey, options)
         );
+
+        // If Gemini Imagen fails (e.g. 404 predict not available for free AI Studio keys), auto-fallback to Cloudflare FLUX.1 if available
+        if (!result.success) {
+          const cfPairs = KeyPool.getCloudflarePairs(apiKey, accountId);
+          if (cfPairs.length > 0) {
+            console.warn(`[Image Route] Gemini Imagen error (${result.error}). Auto-fallbacking to Cloudflare FLUX.1...`);
+            result = await KeyPool.executeCloudflareWithRotation(cfPairs, (activeKey, activeAcct) =>
+              CloudflareAdapter.generateImage(activeKey, activeAcct, {
+                ...options,
+                model: '@cf/black-forest-labs/flux-1-schnell',
+              })
+            );
+          }
+        }
         break;
       }
 

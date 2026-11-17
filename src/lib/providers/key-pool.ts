@@ -49,10 +49,13 @@ export class KeyPool {
       'CLOUDFLARE_API_KEY',
       'CLOUDFLARE_API_TOKEN',
       'CLOUDFLARE_API_KEYS',
+      'CLOUDFIRE_API_KEY',
+      'CLOUDFIRE_API_TOKEN',
     ]);
     const accountIds = this.getKeys(rawAccountIds, [
       'CLOUDFLARE_ACCOUNT_ID',
       'CLOUDFLARE_ACCOUNT_IDS',
+      'CLOUDFIRE_ACCOUNT_ID',
     ]);
 
     if (keys.length === 0 || accountIds.length === 0) {
