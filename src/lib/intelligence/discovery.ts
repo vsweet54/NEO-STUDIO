@@ -99,15 +99,19 @@ export class ModelDiscoveryEngine {
         const isImagen = cleanId.includes('imagen');
         const isVeo = cleanId.includes('veo');
 
+        const cleanLower = cleanId.toLowerCase();
+        const isTts = cleanLower.includes('tts');
+        const isAudio = cleanLower.includes('audio') || isTts;
+
         const capabilities: ModelCapabilities = {
-          supportsText: supportsText && !isImagen && !isVeo,
+          supportsText: supportsText && !isImagen && !isVeo && !isTts,
           supportsImageGen: isImagen,
           supportsVideoGen: isVeo,
-          supportsAudioGen: false,
-          supportsVision: cleanId.includes('flash') || cleanId.includes('pro') || cleanId.includes('vision'),
-          supportsAudioInput: cleanId.includes('2.0') || cleanId.includes('1.5'),
-          supportsTools: true,
-          supportsJsonMode: true,
+          supportsAudioGen: isTts,
+          supportsVision: !isAudio && (cleanLower.includes('flash') || cleanLower.includes('pro') || cleanLower.includes('vision')),
+          supportsAudioInput: cleanLower.includes('2.0') || cleanLower.includes('1.5'),
+          supportsTools: !isTts,
+          supportsJsonMode: !isTts,
           maxContextTokens: m.inputTokenLimit || 1048576,
           maxOutputTokens: m.outputTokenLimit || 8192,
           isLocal: false,
@@ -360,18 +364,28 @@ export class ModelDiscoveryEngine {
           const json = await res.json();
           const rawModels: any[] = json.data || [];
           if (rawModels.length > 0) {
-            return rawModels.map((m) => {
-              const id = m.id;
-              const capabilities: ModelCapabilities = {
-                supportsText: true,
-                supportsImageGen: false,
-                supportsVideoGen: false,
-                supportsAudioGen: false,
-                supportsVision: id.includes('vision') || id.includes('vl'),
-                supportsAudioInput: false,
-                maxContextTokens: 131072,
-                isLocal: false,
-              };
+            return rawModels
+              .filter((m) => {
+                const id = (m.id || '').toLowerCase();
+                // Filter out embeddings, clip, and guardrail models that don't behave as general conversational/coding models
+                if (id.includes('embed') || id.includes('clip') || id.includes('detector') || id.includes('calibration') || id.includes('guard')) {
+                  return false;
+                }
+                return true;
+              })
+              .map((m) => {
+                const id = m.id;
+                const idLower = id.toLowerCase();
+                const capabilities: ModelCapabilities = {
+                  supportsText: true,
+                  supportsImageGen: false,
+                  supportsVideoGen: false,
+                  supportsAudioGen: false,
+                  supportsVision: idLower.includes('vision') || idLower.includes('vl') || idLower.includes('neva'),
+                  supportsAudioInput: false,
+                  maxContextTokens: 131072,
+                  isLocal: false,
+                };
               return {
                 id,
                 name: this.formatModelName(id),
