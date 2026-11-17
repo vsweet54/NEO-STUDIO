@@ -6,36 +6,36 @@ import {
   Download,
   Copy,
   Check,
-  Play,
   Volume2,
   Video,
   Image as ImageIcon,
   Plus,
   Trash2,
-  Layers,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Camera,
-  Sun,
   Edit3,
   Save,
   MessageSquare,
+  Clapperboard,
+  ArrowRight,
+  Eye,
+  Move,
+  Layers,
   AlertCircle,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Textarea, Input, Select } from '../ui/Input';
-import { Project, Episode, Scene, DialogueLine } from '@/types/project';
+import { Modal } from '../ui/Modal';
+import { Project, Episode, Scene, DialogueLine, Shot } from '@/types/project';
 import { Character } from '@/types/character';
 import { getProjectById } from '@/lib/db/projects';
 import { getEpisodesByProject } from '@/lib/db/episodes';
 import { getScenesByEpisode, saveScene, duplicateScene, deleteScene } from '@/lib/db/scenes';
 import { getCharactersByProject } from '@/lib/db/characters';
-import { getMediaBlobUrl, saveMediaBlob } from '@/lib/db/media';
+import { getMediaBlobUrl } from '@/lib/db/media';
 import { downloadMediaBlobFile } from '@/lib/storage/export-import';
 import { queueManager } from '@/lib/queue/generation-queue';
-import { PromptEngine } from '@/lib/prompts/templates';
 
 interface StoryboardStudioProps {
   projectId: string;
@@ -58,6 +58,13 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
   const [activeScene, setActiveScene] = useState<Scene | null>(null);
   const [sceneImageUrl, setSceneImageUrl] = useState<string | null>(null);
 
+  // Shot-specific states
+  const [shotImageUrls, setShotImageUrls] = useState<Record<string, string>>({});
+  const [selectedEditingShot, setSelectedEditingShot] = useState<Shot | null>(null);
+  const [isEditingShotModalOpen, setIsEditingShotModalOpen] = useState(false);
+  const [copiedShotPrompt, setCopiedShotPrompt] = useState<{ id: string; type: 'image' | 'video' } | null>(null);
+  const [generatingShotIds, setGeneratingShotIds] = useState<Record<string, boolean>>({});
+
   // Editable fields for current scene
   const [imagePrompt, setImagePrompt] = useState('');
   const [videoPrompt, setVideoPrompt] = useState('');
@@ -71,6 +78,7 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [ttsPlayingLineId, setTtsPlayingLineId] = useState<string | null>(null);
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false);
 
   // Load project details and scenes
   useEffect(() => {
@@ -111,7 +119,43 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
     async function syncScene() {
       const found = scenes.find((s) => s.id === selectedSceneId);
       if (found) {
-        setActiveScene(found);
+        // If scene has no shots yet, synthesize initial shots so the user always has a multi-shot director breakdown
+        let currentShots = found.shots;
+        if (!currentShots || currentShots.length === 0) {
+          const count = found.shotsCount || 3;
+          const totalDur = found.duration || 10;
+          const shotDur = Math.round((totalDur / count) * 10) / 10;
+
+          currentShots = Array.from({ length: count }, (_, idx) => {
+            const start = Math.round(idx * shotDur * 10) / 10;
+            const end = idx === count - 1 ? totalDur : Math.round((start + shotDur) * 10) / 10;
+            return {
+              id: `shot_${found.id}_${idx + 1}_${Date.now()}`,
+              shotNumber: idx + 1,
+              startTime: start,
+              endTime: end,
+              duration: Math.round((end - start) * 10) / 10,
+              description: `Shot ${idx + 1}: Kronologi kejadian dalam adegan "${found.title}"`,
+              characterAction: `Aksi karakter shot ${idx + 1}`,
+              facialExpression: 'Ekspresif dan terfokus',
+              bodyMovement: 'Gerakan tubuh alami',
+              cameraAngle: found.cameraAngle || 'Eye-level Medium Shot',
+              cameraMovement: found.cameraMovement || 'Slow cinematic push-in',
+              dialogue: found.dialogue?.[idx]
+                ? `[${found.dialogue[idx].emotionTag || 'bicara'}] ${found.dialogue[idx].characterName}: "${found.dialogue[idx].text}"`
+                : '',
+              imagePrompt: `${found.imagePrompt || ''}, shot ${idx + 1} specific event, cinematic framing, 8k resolution`,
+              videoPrompt: `${found.videoPrompt || ''}, smooth motion 24fps for shot ${idx + 1}`,
+              transition: idx === count - 1 ? (found.transition || 'Cut to next scene') : 'Cut to next shot',
+              status: 'idle' as const,
+            };
+          });
+
+          found.shots = currentShots;
+          await saveScene(found);
+        }
+
+        setActiveScene({ ...found, shots: currentShots });
         setImagePrompt(found.imagePrompt || '');
         setVideoPrompt(found.videoPrompt || '');
         setDialogueLines(found.dialogue || []);
@@ -120,12 +164,25 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
         setLighting(found.lighting || 'Cinematic Lighting');
         setSceneDuration(found.duration || 10);
 
+        // Load scene overview image
         if (found.generatedImageBlobId) {
           const url = await getMediaBlobUrl(found.generatedImageBlobId);
           setSceneImageUrl(url);
         } else {
           setSceneImageUrl(null);
         }
+
+        // Load individual shot image blob URLs
+        const shotUrlMap: Record<string, string> = {};
+        for (const shot of currentShots) {
+          if (shot.generatedImageBlobId) {
+            const shotUrl = await getMediaBlobUrl(shot.generatedImageBlobId);
+            if (shotUrl) {
+              shotUrlMap[shot.id] = shotUrl;
+            }
+          }
+        }
+        setShotImageUrls(shotUrlMap);
       }
     }
 
@@ -167,6 +224,89 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
     setTimeout(() => setCopiedPrompt(null), 2000);
   };
 
+  const handleCopyShotPrompt = (shotId: string, type: 'image' | 'video', text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedShotPrompt({ id: shotId, type });
+    setTimeout(() => setCopiedShotPrompt(null), 2000);
+  };
+
+  // Generate visual image for an individual shot
+  const handleGenerateShotImage = async (shot: Shot) => {
+    if (!activeScene) return;
+
+    setGeneratingShotIds((prev) => ({ ...prev, [shot.id]: true }));
+
+    try {
+      await queueManager.addJob({
+        projectId: activeScene.projectId,
+        sceneId: activeScene.id,
+        taskType: 'image',
+        prompt: shot.imagePrompt || activeScene.imagePrompt,
+        params: {
+          aspectRatio: activeScene.aspectRatio || '16:9',
+        },
+        onComplete: async (job) => {
+          setGeneratingShotIds((prev) => ({ ...prev, [shot.id]: false }));
+          if (job.resultBlobId) {
+            // Update shot in current scene
+            const updatedShots = (activeScene.shots || []).map((s) =>
+              s.id === shot.id
+                ? { ...s, generatedImageBlobId: job.resultBlobId, status: 'completed' as const }
+                : s
+            );
+
+            // If scene doesn't have an overview image yet, use shot 1 image
+            const updatedScene: Scene = {
+              ...activeScene,
+              shots: updatedShots,
+              generatedImageBlobId: activeScene.generatedImageBlobId || job.resultBlobId,
+              generationStatus: 'completed',
+              updatedAt: Date.now(),
+            };
+
+            await saveScene(updatedScene);
+            setActiveScene(updatedScene);
+            setScenes((prev) => prev.map((s) => (s.id === updatedScene.id ? updatedScene : s)));
+
+            const url = await getMediaBlobUrl(job.resultBlobId);
+            if (url) {
+              setShotImageUrls((prev) => ({ ...prev, [shot.id]: url }));
+              if (!sceneImageUrl) {
+                setSceneImageUrl(url);
+              }
+            }
+          }
+        },
+        onError: (err) => {
+          setGeneratingShotIds((prev) => ({ ...prev, [shot.id]: false }));
+          alert(`Gagal generate gambar shot ${shot.shotNumber}: ${err}`);
+        },
+      });
+    } catch (err: any) {
+      setGeneratingShotIds((prev) => ({ ...prev, [shot.id]: false }));
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  // Generate all shots in current scene sequentially / parallel in queue
+  const handleGenerateAllShots = async () => {
+    if (!activeScene || !activeScene.shots || activeScene.shots.length === 0) return;
+    setIsBatchGenerating(true);
+
+    try {
+      for (const shot of activeScene.shots) {
+        await handleGenerateShotImage(shot);
+      }
+      setSaveNotice('Seluruh antrean shot berhasil dijadwalkan ke generator AI!');
+      setTimeout(() => setSaveNotice(null), 4000);
+    } catch (err: any) {
+      alert(`Gagal memulai antrean shot: ${err.message}`);
+    } finally {
+      setIsBatchGenerating(false);
+    }
+  };
+
+  // Generate overview scene image (traditional single grid prompt)
   const handleGenerateImage = async () => {
     if (!activeScene || !imagePrompt) return;
 
@@ -208,7 +348,6 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
     if (!activeScene || !videoPrompt) return;
 
     let firstFrameBase64: string | undefined = undefined;
-    // If scene already has generated image, we can condition first frame
     if (sceneImageUrl && sceneImageUrl.startsWith('data:image')) {
       firstFrameBase64 = sceneImageUrl.split(',')[1];
     }
@@ -255,6 +394,126 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  const handleDownloadShotImage = async (shot: Shot) => {
+    if (!shot.generatedImageBlobId) return;
+    try {
+      await downloadMediaBlobFile(
+        shot.generatedImageBlobId,
+        `storyboard_${project?.title || 'project'}_adegan_${activeScene?.sceneNumber}_shot_${shot.shotNumber}.png`
+      );
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // Add a new shot to the active scene
+  const handleAddNewShot = async () => {
+    if (!activeScene) return;
+
+    const existingShots = activeScene.shots || [];
+    const newShotNumber = existingShots.length + 1;
+    const lastShot = existingShots[existingShots.length - 1];
+    const startTime = lastShot ? lastShot.endTime : 0;
+    const duration = 2.5;
+    const endTime = Math.round((startTime + duration) * 10) / 10;
+
+    const newShot: Shot = {
+      id: `shot_${activeScene.id}_${newShotNumber}_${Date.now()}`,
+      shotNumber: newShotNumber,
+      startTime,
+      endTime,
+      duration,
+      description: `Shot ${newShotNumber}: Aksi baru dalam adegan`,
+      characterAction: 'Karakter melakukan aksi lanjutan',
+      facialExpression: 'Fokus dan natural',
+      bodyMovement: 'Gerakan tubuh terkoordinasi',
+      cameraAngle: activeScene.cameraAngle || 'Eye-level Medium Shot',
+      cameraMovement: activeScene.cameraMovement || 'Steady static',
+      dialogue: '',
+      imagePrompt: `${activeScene.imagePrompt}, shot ${newShotNumber} dynamic perspective, photorealistic 8k`,
+      videoPrompt: `${activeScene.videoPrompt}, 24fps motion for shot ${newShotNumber}`,
+      transition: 'Cut to next shot',
+      status: 'idle',
+    };
+
+    const updatedShots = [...existingShots, newShot];
+    const updatedScene: Scene = {
+      ...activeScene,
+      shots: updatedShots,
+      shotsCount: updatedShots.length,
+      duration: Math.max(activeScene.duration, endTime),
+      updatedAt: Date.now(),
+    };
+
+    await saveScene(updatedScene);
+    setActiveScene(updatedScene);
+    setScenes((prev) => prev.map((s) => (s.id === updatedScene.id ? updatedScene : s)));
+    setSceneDuration(updatedScene.duration);
+  };
+
+  // Delete a shot from the active scene and renumber
+  const handleDeleteShot = async (shotId: string) => {
+    if (!activeScene || !activeScene.shots) return;
+    if (activeScene.shots.length <= 1) {
+      alert('Adegan harus memiliki minimal 1 shot.');
+      return;
+    }
+
+    if (!confirm('Hapus shot ini dari adegan?')) return;
+
+    const filtered = activeScene.shots.filter((s) => s.id !== shotId);
+    let cumulativeTime = 0;
+    const renumberedShots: Shot[] = filtered.map((s, idx) => {
+      const dur = s.duration || 2.5;
+      const start = Math.round(cumulativeTime * 10) / 10;
+      const end = Math.round((start + dur) * 10) / 10;
+      cumulativeTime = end;
+      return {
+        ...s,
+        shotNumber: idx + 1,
+        startTime: start,
+        endTime: end,
+      };
+    });
+
+    const updatedScene: Scene = {
+      ...activeScene,
+      shots: renumberedShots,
+      shotsCount: renumberedShots.length,
+      duration: Math.round(cumulativeTime * 10) / 10,
+      updatedAt: Date.now(),
+    };
+
+    await saveScene(updatedScene);
+    setActiveScene(updatedScene);
+    setScenes((prev) => prev.map((s) => (s.id === updatedScene.id ? updatedScene : s)));
+    setSceneDuration(updatedScene.duration);
+  };
+
+  // Save changes from Shot Detail Modal
+  const handleSaveEditingShot = async () => {
+    if (!activeScene || !selectedEditingShot) return;
+
+    const updatedShots = (activeScene.shots || []).map((s) =>
+      s.id === selectedEditingShot.id ? selectedEditingShot : s
+    );
+
+    const updatedScene: Scene = {
+      ...activeScene,
+      shots: updatedShots,
+      updatedAt: Date.now(),
+    };
+
+    await saveScene(updatedScene);
+    setActiveScene(updatedScene);
+    setScenes((prev) => prev.map((s) => (s.id === updatedScene.id ? updatedScene : s)));
+    setIsEditingShotModalOpen(false);
+    setSelectedEditingShot(null);
+
+    setSaveNotice(`Perubahan Shot ${selectedEditingShot.shotNumber} berhasil disimpan!`);
+    setTimeout(() => setSaveNotice(null), 3000);
   };
 
   const handlePlayTtsLine = (line: DialogueLine) => {
@@ -340,12 +599,14 @@ Format output JSON array:
     );
   }
 
+  const activeShots = activeScene?.shots || [];
+
   return (
-    <div className="space-y-5 pb-16">
-      {/* Top Scene Bar (Identical in aesthetic to SUTRADARA AI Screenshot) */}
+    <div className="space-y-6 pb-20">
+      {/* Top Scene Director Bar (Identical to MasTon / SUTRADARA AI Visual Reference) */}
       <div className="bg-[#101222] border border-border rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-4">
-          {/* Adegan Number Block */}
+          {/* Adegan Number Badge */}
           <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-accent-purple to-purple-900 border border-purple-500/40 flex flex-col items-center justify-center text-white shrink-0 shadow-lg shadow-purple-950/60">
             <span className="text-2xl font-black font-mono leading-none">
               {activeScene ? activeScene.sceneNumber : '1'}
@@ -371,21 +632,21 @@ Format output JSON array:
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-gray-400 mt-1 font-mono">
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-accent-cyan" />
-                {sceneDuration}s
+                {sceneDuration}s Total
               </span>
               <span className="flex items-center gap-1">
                 <Camera className="w-3.5 h-3.5 text-accent-purple" />
-                {activeScene?.shotsCount || 3} Shot
+                {activeShots.length} Shot Berurutan
               </span>
               <span className="text-gray-500">|</span>
-              <span className="text-gray-300 truncate max-w-[200px]">
-                {activeScene?.transition || 'End of episode'}
+              <span className="text-gray-300 truncate max-w-[260px]">
+                Transisi ke scene berikutnya: {activeScene?.transition || 'Cut to next scene'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Scene Navigation Selector */}
+        {/* Scene Navigation Selector & Controls */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
           {scenes.map((sc) => (
             <button
@@ -421,47 +682,262 @@ Format output JSON array:
       </div>
 
       {saveNotice && (
-        <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-lg text-xs font-medium animate-in fade-in">
-          {saveNotice}
+        <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-lg text-xs font-medium animate-in fade-in flex items-center justify-between">
+          <span>{saveNotice}</span>
+          <Check className="w-4 h-4 text-emerald-400" />
         </div>
       )}
 
-      {/* Main Studio Workspace Grid */}
+      {/* SECTION 1: SHOT DIRECTOR WORKSPACE (Visual Grid of Consecutive Event Shots) */}
+      <div className="bg-[#0D0E1A] border border-border rounded-2xl p-5 space-y-4 shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Clapperboard className="w-5 h-5 text-accent-cyan" />
+            <div>
+              <h3 className="text-sm font-bold text-gray-100 uppercase tracking-wider">
+                GRID STORYBOARD SHOT — SUTRADARA AI
+              </h3>
+              <p className="text-xs text-gray-400">
+                Setiap kejadian visual dipecah secara kronologis dengan gambar, pergerakan kamera, dan aksi mandiri.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleAddNewShot}
+              className="text-xs"
+            >
+              <Plus className="w-3.5 h-3.5 text-accent-cyan" />
+              Tambah Shot
+            </Button>
+
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleGenerateAllShots}
+              disabled={isBatchGenerating}
+              className="text-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {isBatchGenerating ? 'Menjadwalkan...' : 'Generate Seluruh Shot'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Responsive Multi-Shot Grid (2 to 4 columns matching professional storyboard boards) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {activeShots.map((shot) => {
+            const shotImg = shotImageUrls[shot.id];
+            const isGeneratingThisShot = generatingShotIds[shot.id];
+
+            return (
+              <div
+                key={shot.id}
+                className="bg-[#111321] border border-border/90 hover:border-accent-purple/50 rounded-xl overflow-hidden shadow-lg transition-all flex flex-col group"
+              >
+                {/* Shot Header Bar */}
+                <div className="px-3 py-2 bg-[#17192D] border-b border-border/80 flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-accent-purple/30 border border-purple-500/40 text-purple-200 font-bold text-[11px]">
+                      SHOT {shot.shotNumber}
+                    </span>
+                    <span className="text-gray-400 text-[11px]">
+                      {shot.startTime.toFixed(1)}s - {shot.endTime.toFixed(1)}s
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-gray-500">
+                    ({shot.duration.toFixed(1)}s)
+                  </span>
+                </div>
+
+                {/* Shot Image Container */}
+                <div className="relative aspect-video bg-black/60 overflow-hidden flex items-center justify-center">
+                  {shotImg ? (
+                    <>
+                      <img
+                        src={shotImg}
+                        alt={`Shot ${shot.shotNumber} - Adegan ${activeScene?.sceneNumber}`}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
+                      />
+                      {/* Hover Overlay with Quick Actions */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleGenerateShotImage(shot)}
+                          disabled={isGeneratingThisShot}
+                          className="h-8 px-2 text-xs"
+                          title="Generate Ulang Visual Shot Ini"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingThisShot ? 'animate-spin' : ''}`} />
+                        </Button>
+                        <Button
+                          variant="cyan"
+                          size="sm"
+                          onClick={() => handleDownloadShotImage(shot)}
+                          className="h-8 px-2 text-xs"
+                          title="Download Gambar Shot Ini"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedEditingShot(shot);
+                            setIsEditingShotModalOpen(true);
+                          }}
+                          className="h-8 px-2 text-xs"
+                          title="Edit Detail Shot"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-4 text-center space-y-2">
+                      <Camera className="w-6 h-6 mx-auto text-gray-600" />
+                      <p className="text-[11px] text-gray-400 leading-tight line-clamp-2">
+                        {shot.description || 'Visual belum di-generate'}
+                      </p>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleGenerateShotImage(shot)}
+                        disabled={isGeneratingThisShot}
+                        className="h-7 text-[11px] px-2.5 mx-auto"
+                      >
+                        {isGeneratingThisShot ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" /> Render...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3" /> Generate Shot
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Shot Meta & Action Narrative */}
+                <div className="p-3 space-y-2 text-xs flex-1 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <p className="text-gray-200 font-medium line-clamp-2 text-[12px] leading-snug">
+                      {shot.description || shot.characterAction}
+                    </p>
+
+                    <div className="flex flex-wrap gap-1 text-[10px] font-mono text-gray-400">
+                      <span className="px-1.5 py-0.5 rounded bg-secondary/80 border border-border">
+                        {shot.cameraAngle}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-secondary/80 border border-border">
+                        {shot.cameraMovement}
+                      </span>
+                    </div>
+
+                    {shot.dialogue && (
+                      <div className="p-1.5 rounded bg-black/40 border border-border/60 text-[11px] text-gray-300 italic line-clamp-2">
+                        {shot.dialogue}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Shot Action Bar */}
+                  <div className="pt-2 border-t border-border/70 flex items-center justify-between gap-1 text-[11px]">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleCopyShotPrompt(shot.id, 'image', shot.imagePrompt)}
+                        className="px-1.5 py-1 rounded bg-secondary/60 hover:bg-secondary text-gray-300 hover:text-white transition-colors"
+                        title="Salin Prompt Gambar Shot"
+                      >
+                        {copiedShotPrompt?.id === shot.id && copiedShotPrompt?.type === 'image' ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <span className="text-[10px] font-mono">IMG</span>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => handleCopyShotPrompt(shot.id, 'video', shot.videoPrompt)}
+                        className="px-1.5 py-1 rounded bg-secondary/60 hover:bg-secondary text-gray-300 hover:text-white transition-colors"
+                        title="Salin Prompt Video Shot"
+                      >
+                        {copiedShotPrompt?.id === shot.id && copiedShotPrompt?.type === 'video' ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <span className="text-[10px] font-mono">VID</span>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          setSelectedEditingShot(shot);
+                          setIsEditingShotModalOpen(true);
+                        }}
+                        className="px-2 py-1 rounded bg-secondary/80 hover:bg-accent-purple hover:text-white text-gray-300 transition-colors flex items-center gap-1 text-[11px]"
+                      >
+                        <Edit3 className="w-3 h-3" /> Edit
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteShot(shot.id)}
+                        className="p-1 rounded text-gray-500 hover:text-red-400 transition-colors"
+                        title="Hapus Shot"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SECTION 2: SCENE OVERVIEW & EDITING (Matching exact MasTon Sutradara AI layout) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Storyboard Visual Frame (Lg: 7 cols) */}
+        {/* Left Column: Full Scene Preview Image & Dialogue Card (Lg: 7 cols) */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Storyboard Multi-panel Image Container */}
+          {/* Main Storyboard Visual Container */}
           <div className="bg-[#0D0E1A] border border-border rounded-2xl overflow-hidden shadow-2xl">
             {sceneImageUrl ? (
               <div className="relative group bg-black">
                 <img
                   src={sceneImageUrl}
                   alt={`Storyboard Adegan ${activeScene?.sceneNumber}`}
-                  className="w-full h-auto object-cover max-h-[500px]"
+                  className="w-full h-auto object-cover max-h-[480px]"
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                   <Button variant="cyan" size="sm" onClick={handleDownloadImage}>
-                    <Download className="w-4 h-4" /> Download
+                    <Download className="w-4 h-4" /> Download Gambar
                   </Button>
                 </div>
               </div>
             ) : (
-              <div className="py-20 px-6 text-center space-y-4 bg-gradient-to-b from-[#111322] to-[#0A0B14]">
+              <div className="py-16 px-6 text-center space-y-4 bg-gradient-to-b from-[#111322] to-[#0A0B14]">
                 <div className="w-16 h-16 mx-auto rounded-2xl bg-secondary/80 border border-border flex items-center justify-center">
                   <Film className="w-8 h-8 text-gray-500" />
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-gray-200">
-                    Storyboard Gambar Belum Di-generate
+                    Storyboard Ikhtisar Adegan Belum Di-generate
                   </h4>
                   <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                    Klik tombol "Generate Ulang" atau gunakan tombol pada kartu Image Prompt di bawah untuk merender visual adegan.
+                    Anda dapat merender masing-masing shot pada grid di atas atau render poster ikhtisar adegan di sini.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Action Bar Below Image (Matching screenshot buttons) */}
+            {/* Action Bar Below Image (Identical to reference screenshot) */}
             <div className="p-3 sm:p-4 bg-[#111321] border-t border-border flex flex-wrap items-center justify-between gap-2.5">
               <Button
                 variant="secondary"
@@ -531,7 +1007,7 @@ Format output JSON array:
               </div>
             </div>
 
-            {/* Dialogue Lines Display / Editor */}
+            {/* Dialogue Lines Display / Audio Synthesizer */}
             <div className="space-y-2.5 bg-[#0A0B14] p-3.5 rounded-xl border border-border/80">
               {dialogueLines.length === 0 ? (
                 <p className="text-xs text-gray-500 italic">Tidak ada dialog pada adegan ini.</p>
@@ -576,7 +1052,7 @@ Format output JSON array:
               <div className="flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-accent-purple" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-gray-200">
-                  IMAGE PROMPT
+                  IMAGE PROMPT (SCENE OVERVIEW)
                 </h3>
               </div>
               <Button
@@ -619,7 +1095,7 @@ Format output JSON array:
               <div className="flex items-center gap-2">
                 <Video className="w-4 h-4 text-accent-cyan" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-gray-200">
-                  VIDEO PROMPT
+                  VIDEO PROMPT (SCENE DYNAMICS)
                 </h3>
               </div>
               <Button
@@ -693,6 +1169,177 @@ Format output JSON array:
           </div>
         </div>
       </div>
+
+      {/* SHOT DETAIL & EDITING MODAL */}
+      {selectedEditingShot && (
+        <Modal
+          isOpen={isEditingShotModalOpen}
+          onClose={() => {
+            setIsEditingShotModalOpen(false);
+            setSelectedEditingShot(null);
+          }}
+          title={`Edit Shot ${selectedEditingShot.shotNumber} — Adegan ${activeScene?.sceneNumber}`}
+          description="Atur deskripsi kejadian, aksi karakter, sudut kamera, dan prompt gambar serta video secara mandiri."
+          maxWidth="2xl"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <Input
+                label="Waktu Mulai (detik)"
+                type="number"
+                step="0.1"
+                value={selectedEditingShot.startTime}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    startTime: parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+              <Input
+                label="Waktu Selesai (detik)"
+                type="number"
+                step="0.1"
+                value={selectedEditingShot.endTime}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    endTime: parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+              <Input
+                label="Durasi (detik)"
+                type="number"
+                step="0.1"
+                value={selectedEditingShot.duration}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    duration: parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+            </div>
+
+            <Input
+              label="Deskripsi Kejadian"
+              value={selectedEditingShot.description}
+              onChange={(e) =>
+                setSelectedEditingShot({
+                  ...selectedEditingShot,
+                  description: e.target.value,
+                })
+              }
+              placeholder="Apa yang terjadi di shot ini..."
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Aksi Karakter"
+                value={selectedEditingShot.characterAction}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    characterAction: e.target.value,
+                  })
+                }
+              />
+              <Input
+                label="Ekspresi Wajah"
+                value={selectedEditingShot.facialExpression}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    facialExpression: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Sudut Kamera"
+                value={selectedEditingShot.cameraAngle}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    cameraAngle: e.target.value,
+                  })
+                }
+              />
+              <Input
+                label="Pergerakan Kamera"
+                value={selectedEditingShot.cameraMovement}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    cameraMovement: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <Input
+              label="Dialog Shot (Opsional)"
+              value={selectedEditingShot.dialogue || ''}
+              onChange={(e) =>
+                setSelectedEditingShot({
+                  ...selectedEditingShot,
+                  dialogue: e.target.value,
+                })
+              }
+              placeholder='[emosi] NAMA: "Dialog..."'
+            />
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-300">Image Prompt (Visual Shot)</label>
+              <Textarea
+                rows={3}
+                value={selectedEditingShot.imagePrompt}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    imagePrompt: e.target.value,
+                  })
+                }
+                className="text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-300">Video Prompt (Gerakan Shot)</label>
+              <Textarea
+                rows={3}
+                value={selectedEditingShot.videoPrompt}
+                onChange={(e) =>
+                  setSelectedEditingShot({
+                    ...selectedEditingShot,
+                    videoPrompt: e.target.value,
+                  })
+                }
+                className="text-xs font-mono"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-border">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setIsEditingShotModalOpen(false);
+                  setSelectedEditingShot(null);
+                }}
+              >
+                Batal
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleSaveEditingShot}>
+                <Save className="w-3.5 h-3.5" /> Simpan Perubahan Shot
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

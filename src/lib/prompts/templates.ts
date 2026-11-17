@@ -98,7 +98,26 @@ STRICT JSON OUTPUT FORMAT REQUIREMENTS:
       "lighting": "e.g. Golden hour volumetric rim light, neon moody noir",
       "environment": "e.g. Bustling night street market, misty cyberpunk alley",
       "shotsCount": 3,
-      "transition": "Cut to next scene / Dissolve"
+      "transition": "Cut to next scene / Dissolve",
+      "shots": [
+        {
+          "shotNumber": 1,
+          "startTime": 0.0,
+          "endTime": 3.0,
+          "duration": 3.0,
+          "description": "Chronological action 1: e.g. Karakter berjalan mendekati pintu gerbang",
+          "characterAction": "Langkah mantap dengan mata terfokus",
+          "facialExpression": "Ekspresi serius dan waspada",
+          "bodyMovement": "Melangkah perlahan, postur tegap",
+          "objectInteraction": "Tangan menyentuh gagang pintu",
+          "cameraAngle": "Medium Close-up, eye-level",
+          "cameraMovement": "Slow push-in dolly",
+          "dialogue": "[focused] RIRIN: 'Apakah ini tempatnya?'",
+          "imagePrompt": "Cinematic 35mm film shot of [Character], walking towards the wooden door, hand touching door handle, focused expression, ${params.visualStyle}, cinematic dramatic lighting, photorealistic 8k, aspect ratio ${params.aspectRatio}",
+          "videoPrompt": "[VIDEO MOTION] Character steps forward towards camera, hand reaches out to touch door handle, camera slowly pushes in 24fps motion blur, cinematic lighting",
+          "transition": "Direct cut to Shot 2"
+        }
+      ]
     }
   ]
 }`;

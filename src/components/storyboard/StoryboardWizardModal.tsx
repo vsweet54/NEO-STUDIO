@@ -216,6 +216,65 @@ export const StoryboardWizardModal: React.FC<StoryboardWizardModalProps> = ({
 
               const charIds = (sc.characterNames || []).map((name: string) => charIdMap.get(name) || '').filter(Boolean);
 
+              // Parse or synthesize hierarchical shots
+              const rawShots = Array.isArray(sc.shots) && sc.shots.length > 0 ? sc.shots : [];
+              const targetShotsCount = sc.shotsCount || (rawShots.length > 0 ? rawShots.length : 3);
+              const shotDuration = Number((sceneDuration / targetShotsCount).toFixed(1));
+
+              const parsedShots: any[] = [];
+              if (rawShots.length > 0) {
+                let currentStart = 0;
+                for (let sIdx = 0; sIdx < rawShots.length; sIdx++) {
+                  const s = rawShots[sIdx];
+                  const dur = s.duration || shotDuration;
+                  parsedShots.push({
+                    id: 'shot_' + Math.random().toString(36).substring(2, 9) + now + sIdx,
+                    shotNumber: s.shotNumber || sIdx + 1,
+                    startTime: Number(currentStart.toFixed(1)),
+                    endTime: Number((currentStart + dur).toFixed(1)),
+                    duration: dur,
+                    description: s.description || `Kejadian shot ${sIdx + 1}`,
+                    characterAction: s.characterAction || 'Aksi karakter dalam shot',
+                    facialExpression: s.facialExpression || 'Ekspresi natural',
+                    bodyMovement: s.bodyMovement || 'Gerakan tubuh alami',
+                    objectInteraction: s.objectInteraction || '',
+                    cameraAngle: s.cameraAngle || sc.cameraAngle || 'Medium Shot',
+                    cameraMovement: s.cameraMovement || sc.cameraMovement || 'Static / Slow Push',
+                    dialogue: s.dialogue || '',
+                    imagePrompt: s.imagePrompt || `${sc.imagePrompt}, Shot ${sIdx + 1}: ${s.description || ''}`,
+                    videoPrompt: s.videoPrompt || `${sc.videoPrompt}, 24fps motion for Shot ${sIdx + 1}`,
+                    transition: s.transition || (sIdx === rawShots.length - 1 ? sc.transition || 'Cut' : 'Direct Cut'),
+                    status: 'idle',
+                  });
+                  currentStart += dur;
+                }
+              } else {
+                // Synthesize 3-5 chronological shots if AI only returned scene-level
+                let currentStart = 0;
+                for (let sIdx = 0; sIdx < targetShotsCount; sIdx++) {
+                  parsedShots.push({
+                    id: 'shot_' + Math.random().toString(36).substring(2, 9) + now + sIdx,
+                    shotNumber: sIdx + 1,
+                    startTime: Number(currentStart.toFixed(1)),
+                    endTime: Number((currentStart + shotDuration).toFixed(1)),
+                    duration: shotDuration,
+                    description: `Kejadian shot ${sIdx + 1}: Kronologi visual adegan ${i + 1}`,
+                    characterAction: `Aksi shot ke-${sIdx + 1}`,
+                    facialExpression: 'Fokus dan ekspresif',
+                    bodyMovement: 'Postur natural sesuai situasi adegan',
+                    objectInteraction: '',
+                    cameraAngle: sIdx === 0 ? 'Establishing / Wide' : sIdx === 1 ? 'Medium Close-Up' : 'Close-Up Reaction',
+                    cameraMovement: sIdx === 0 ? 'Slow Push-in' : 'Tracking Shot',
+                    dialogue: (sc.dialogue && sc.dialogue[sIdx]?.text) ? `[${sc.dialogue[sIdx].emotionTag || 'bicara'}] ${sc.dialogue[sIdx].characterName}: "${sc.dialogue[sIdx].text}"` : '',
+                    imagePrompt: `Cinematic 35mm film shot ${sIdx + 1} of ${sc.title}, ${sc.description}, ${visualStyle}, ${sc.lighting || 'cinematic lighting'}, photorealistic 8k, aspect ratio ${aspectRatio}`,
+                    videoPrompt: `[VIDEO MOTION] Shot ${sIdx + 1} continuity: Camera moves smoothly, character performs action naturally, 24fps film motion blur`,
+                    transition: sIdx === targetShotsCount - 1 ? sc.transition || 'Cut' : 'Direct Cut',
+                    status: 'idle',
+                  });
+                  currentStart += shotDuration;
+                }
+              }
+
               const sceneRecord: Scene = {
                 id: sceneId,
                 projectId,
@@ -238,10 +297,11 @@ export const StoryboardWizardModal: React.FC<StoryboardWizardModalProps> = ({
                 environment: sc.environment || 'Studio Setting',
                 duration: sceneDuration,
                 aspectRatio,
-                shotsCount: sc.shotsCount || 3,
+                shotsCount: parsedShots.length,
                 transition: sc.transition || 'Cut',
                 referenceImageBlobIds: [],
                 generationStatus: 'prompts-ready',
+                shots: parsedShots,
                 createdAt: now,
                 updatedAt: now,
               };

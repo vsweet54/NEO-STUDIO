@@ -97,6 +97,28 @@ export type SceneGenerationStatus =
   | 'completed'
   | 'failed';
 
+export interface Shot {
+  id: string;
+  shotNumber: number;
+  startTime: number; // e.g. 0.0 (in seconds)
+  endTime: number; // e.g. 2.5 (in seconds)
+  duration: number; // in seconds
+  description: string;
+  characterAction: string;
+  facialExpression: string;
+  bodyMovement: string;
+  objectInteraction?: string;
+  cameraAngle: string;
+  cameraMovement: string;
+  dialogue?: string;
+  imagePrompt: string;
+  videoPrompt: string;
+  transition: string;
+  generatedImageBlobId?: string;
+  generatedVideoBlobId?: string;
+  status: 'idle' | 'generating' | 'completed' | 'failed';
+}
+
 export interface Scene {
   id: string;
   projectId: string;
@@ -121,6 +143,7 @@ export interface Scene {
   generatedVideoBlobId?: string;
   generatedAudioBlobId?: string;
   generationStatus: SceneGenerationStatus;
+  shots?: Shot[]; // Professional multi-shot breakdown
   createdAt: number;
   updatedAt: number;
 }
