@@ -154,7 +154,24 @@ export class ModelTestingEngine {
       }
 
       const reply = json.data?.text || '';
-      const passed = reply.toUpperCase().includes('NEO MODEL TEST SUCCESS') || reply.length > 0;
+      const exactMatch = reply.toUpperCase().includes('NEO MODEL TEST SUCCESS');
+      const hasContent = reply.trim().length > 0;
+      const passed = exactMatch || hasContent;
+
+      let score = 0;
+      if (passed) {
+        score += exactMatch ? 70 : 40;
+        if (hasContent) score += 10;
+        if (latencyMs <= 600) score += 20;
+        else if (latencyMs <= 1200) score += 16;
+        else if (latencyMs <= 2500) score += 12;
+        else if (latencyMs <= 5000) score += 8;
+        else score += 4;
+      }
+
+      const evalDetail = passed
+        ? `Exact match: ${exactMatch ? 'Ya' : 'Sebagian'}, Latency: ${latencyMs}ms, Skor: ${score}/100`
+        : 'Gagal merespons prompt pengujian';
 
       return {
         id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
@@ -163,6 +180,8 @@ export class ModelTestingEngine {
         modelId: model.id,
         category: 'TEXT',
         result: passed ? 'PASS' : 'FAIL',
+        score,
+        evaluationDetails: evalDetail,
         latencyMs,
         tokenUsage: json.tokenUsage,
         pricingStatus: model.pricing.classification,
@@ -218,6 +237,7 @@ export class ModelTestingEngine {
           modelId: model.id,
           category: 'CODING',
           result: 'FAIL',
+          score: 0,
           latencyMs,
           pricingStatus: model.pricing.classification,
           assignedRoles: model.roles,
@@ -228,7 +248,27 @@ export class ModelTestingEngine {
       }
 
       const reply = json.data?.text || '';
-      const containsFunction = reply.includes('function') || reply.includes('=>') || reply.includes('return');
+      const hasFunction = reply.includes('function') || reply.includes('=>');
+      const hasAddition = reply.includes('+') || reply.includes('sum') || reply.includes('add');
+      const hasReturn = reply.includes('return');
+      const hasExplanation = reply.length > 80;
+      const passed = hasFunction && (hasAddition || hasReturn);
+
+      let score = 0;
+      if (passed) {
+        score += hasFunction ? 30 : 0;
+        score += hasAddition ? 30 : 0;
+        score += hasReturn ? 20 : 0;
+        score += hasExplanation ? 10 : 0;
+        if (latencyMs <= 1000) score += 10;
+        else if (latencyMs <= 2000) score += 8;
+        else if (latencyMs <= 4000) score += 5;
+        else score += 2;
+      }
+
+      const evalDetail = passed
+        ? `Sintaks JS: ${hasFunction ? 'Valid' : 'Invalid'}, Logika (+): ${hasAddition ? 'Valid' : 'No'}, Return: ${hasReturn ? 'Ya' : 'No'}, Skor: ${score}/100`
+        : 'Sintaks fungsi JavaScript tidak terdeteksi';
 
       return {
         id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
@@ -236,7 +276,9 @@ export class ModelTestingEngine {
         provider: model.provider,
         modelId: model.id,
         category: 'CODING',
-        result: containsFunction ? 'PASS' : 'FAIL',
+        result: passed ? 'PASS' : 'FAIL',
+        score,
+        evaluationDetails: evalDetail,
         latencyMs,
         tokenUsage: json.tokenUsage,
         pricingStatus: model.pricing.classification,
@@ -302,13 +344,32 @@ export class ModelTestingEngine {
       }
 
       const reply = json.data?.text || '';
+      const hasDescription = reply.trim().length > 10;
+      const identifiesColorOrShape = /red|merah|pixel|square|kotak|color|warna|solid/i.test(reply);
+      const passed = hasDescription;
+
+      let score = 0;
+      if (passed) {
+        score += 50; // accepted multimodal image
+        if (identifiesColorOrShape) score += 35; // detected visual features
+        if (latencyMs <= 1500) score += 15;
+        else if (latencyMs <= 3000) score += 10;
+        else score += 5;
+      }
+
+      const evalDetail = passed
+        ? `Analisis Visual: ${identifiesColorOrShape ? 'Detail Merah Terdeteksi' : 'Deskripsi Umum'}, Latency: ${latencyMs}ms, Skor: ${score}/100`
+        : 'Gagal memproses payload gambar';
+
       return {
         id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
         timestamp: Date.now(),
         provider: model.provider,
         modelId: model.id,
         category: 'VISION',
-        result: reply.length > 5 ? 'PASS' : 'FAIL',
+        result: passed ? 'PASS' : 'FAIL',
+        score,
+        evaluationDetails: evalDetail,
         latencyMs,
         tokenUsage: json.tokenUsage,
         pricingStatus: model.pricing.classification,
@@ -363,6 +424,7 @@ export class ModelTestingEngine {
           modelId: model.id,
           category: 'IMAGE_GEN',
           result: 'FAIL',
+          score: 0,
           latencyMs,
           pricingStatus: model.pricing.classification,
           assignedRoles: model.roles,
@@ -372,7 +434,20 @@ export class ModelTestingEngine {
         };
       }
 
-      const hasValidImage = !!json.data?.imageBase64;
+      const hasValidImage = !!json.data?.imageBase64 && json.data.imageBase64.length > 500;
+      let score = 0;
+      if (hasValidImage) {
+        score += 70; // valid image bytes
+        if (latencyMs <= 2500) score += 30; // edge lightning speed
+        else if (latencyMs <= 5000) score += 22;
+        else if (latencyMs <= 10000) score += 15;
+        else score += 8;
+      }
+
+      const evalDetail = hasValidImage
+        ? `Sintesis Gambar: Valid, Latency: ${latencyMs}ms, Skor: ${score}/100`
+        : 'Tidak menghasilkan byte gambar valid';
+
       return {
         id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
         timestamp: Date.now(),
@@ -380,6 +455,8 @@ export class ModelTestingEngine {
         modelId: model.id,
         category: 'IMAGE_GEN',
         result: hasValidImage ? 'PASS' : 'FAIL',
+        score,
+        evaluationDetails: evalDetail,
         latencyMs,
         pricingStatus: model.pricing.classification,
         assignedRoles: model.roles,
@@ -431,6 +508,7 @@ export class ModelTestingEngine {
           modelId: model.id,
           category: 'AUDIO',
           result: 'FAIL',
+          score: 0,
           latencyMs,
           pricingStatus: model.pricing.classification,
           assignedRoles: model.roles,
@@ -439,13 +517,28 @@ export class ModelTestingEngine {
         };
       }
 
+      const hasValidAudio = !!json.data?.audioBase64 && json.data.audioBase64.length > 500;
+      let score = 0;
+      if (hasValidAudio) {
+        score += 70;
+        if (latencyMs <= 1500) score += 30;
+        else if (latencyMs <= 3500) score += 20;
+        else score += 10;
+      }
+
+      const evalDetail = hasValidAudio
+        ? `Sintesis Audio: Valid, Latency: ${latencyMs}ms, Skor: ${score}/100`
+        : 'Tidak menghasilkan byte audio valid';
+
       return {
         id: 'test_' + Math.random().toString(36).substring(2, 9) + Date.now(),
         timestamp: Date.now(),
         provider: model.provider,
         modelId: model.id,
         category: 'AUDIO',
-        result: json.data?.audioBase64 ? 'PASS' : 'FAIL',
+        result: hasValidAudio ? 'PASS' : 'FAIL',
+        score,
+        evaluationDetails: evalDetail,
         latencyMs,
         pricingStatus: model.pricing.classification,
         assignedRoles: model.roles,

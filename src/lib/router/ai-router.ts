@@ -1,4 +1,5 @@
 import { ProviderConfig, RouterConfig, TaskType, ProviderId, FallbackEvent, ModelDefinition } from '@/types/provider';
+import { TaskSpecializationConfig } from '@/types/model-intelligence';
 import { VERIFIED_MODELS } from '../providers/registry';
 
 export interface RouteResolution {
@@ -10,6 +11,20 @@ export interface RouteResolution {
   fallbackEvent?: FallbackEvent;
 }
 
+const TASK_TO_SPEC_KEY: Record<string, string> = {
+  storyboard: 'storyboard',
+  screenplay: 'writing',
+  dialogue: 'writing',
+  character_profile: 'writing',
+  image: 'image-generation',
+  video: 'video-generation',
+  tts: 'text-to-speech',
+  stt: 'audio-transcription',
+  coding: 'coding',
+  reasoning: 'reasoning',
+  vision: 'vision',
+};
+
 export class AIRouter {
   /**
    * Resolves the best provider and model for a given task.
@@ -19,7 +34,8 @@ export class AIRouter {
     routerConfig: RouterConfig,
     providerConfigs: ProviderConfig[],
     excludeProviderIds: ProviderId[] = [],
-    preferredModelId?: string
+    preferredModelId?: string,
+    specializations?: TaskSpecializationConfig[] | Record<string, TaskSpecializationConfig>
   ): RouteResolution {
     const enabledProviders = providerConfigs.filter(
       (p) => p.enabled && !excludeProviderIds.includes(p.id)
@@ -46,7 +62,7 @@ export class AIRouter {
       }
     }
 
-    // 1. Check MANUAL MODE
+    // 1. Check MANUAL MODE in Router Config
     if (routerConfig.mode === 'manual' && excludeProviderIds.length === 0) {
       const assignment = routerConfig.manualAssignments[task];
       if (assignment) {
@@ -65,7 +81,11 @@ export class AIRouter {
                 supportsAudioGen: task === 'tts',
                 supportsVision: false,
                 maxContextTokens: 32000,
-                isLocal: false,
+                isLocal:
+                  prov.id === 'ollama' &&
+                  (!prov.baseUrl ||
+                    prov.baseUrl.includes('localhost') ||
+                    prov.baseUrl.includes('127.0.0.1')),
               },
               description: 'Custom selected model',
               recommendedFor: [task],
@@ -82,7 +102,42 @@ export class AIRouter {
       }
     }
 
-    // 2. AUTOMATIC MODE / Fallback Selection
+    // 2. TASK SPECIALIZATION MATRIX ROUTING (Universal Model Intelligence)
+    if (specializations) {
+      const specKey = TASK_TO_SPEC_KEY[task] || task;
+      const specConfig: TaskSpecializationConfig | undefined = Array.isArray(specializations)
+        ? specializations.find((s) => s.task === specKey)
+        : specializations[specKey];
+
+      if (specConfig) {
+        // Try models in ranked order: Primary -> Secondary -> Fast -> Best Free -> Backup
+        const candidateModelIds = [
+          specConfig.primaryModelId,
+          specConfig.secondaryModelId,
+          specConfig.fastModelId,
+          specConfig.bestFreeModelId,
+          specConfig.backupModelId,
+        ].filter(Boolean) as string[];
+
+        for (const candidateId of candidateModelIds) {
+          const modelDef = VERIFIED_MODELS.find((m) => m.id === candidateId);
+          if (modelDef) {
+            const prov = enabledProviders.find((p) => p.id === modelDef.providerId);
+            if (prov) {
+              return {
+                providerId: prov.id,
+                modelId: modelDef.id,
+                providerConfig: prov,
+                modelDefinition: modelDef,
+                isFallback: excludeProviderIds.length > 0,
+              };
+            }
+          }
+        }
+      }
+    }
+
+    // 3. AUTOMATIC MODE / Fallback Selection
     // Find candidate models matching task modality
     const candidateModels = VERIFIED_MODELS.filter((m) => {
       // Must belong to an enabled provider that is not excluded
@@ -141,7 +196,8 @@ export class AIRouter {
     errorReason: string,
     routerConfig: RouterConfig,
     providerConfigs: ProviderConfig[],
-    triedProviders: ProviderId[]
+    triedProviders: ProviderId[],
+    specializations?: TaskSpecializationConfig[] | Record<string, TaskSpecializationConfig>
   ): RouteResolution | null {
     if (!routerConfig.autoFallbackEnabled) {
       return null;
@@ -149,7 +205,14 @@ export class AIRouter {
 
     const allExcluded = [...triedProviders, failedProviderId];
     try {
-      const resolution = this.resolveRoute(task, routerConfig, providerConfigs, allExcluded);
+      const resolution = this.resolveRoute(
+        task,
+        routerConfig,
+        providerConfigs,
+        allExcluded,
+        undefined,
+        specializations
+      );
 
       const fallbackEvent: FallbackEvent = {
         id: 'fb_' + Math.random().toString(36).substring(2, 9),

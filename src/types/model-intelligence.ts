@@ -90,6 +90,17 @@ export interface ModelCapabilities {
   isLocal: boolean;
 }
 
+export interface ModelBenchmarkScores {
+  generalChat?: number;
+  reasoning?: number;
+  coding?: number;
+  vision?: number;
+  imageGen?: number;
+  audio?: number;
+  overallScore?: number;
+  lastEvaluatedAt?: number;
+}
+
 export interface DiscoveredModel {
   id: string;
   name: string;
@@ -103,6 +114,7 @@ export interface DiscoveredModel {
   testStatus: ModelTestStatus;
   lastTestedAt?: number;
   latencyMs?: number;
+  benchmarkScores?: ModelBenchmarkScores;
   tokenUsage?: {
     promptTokens?: number;
     completionTokens?: number;
@@ -151,6 +163,8 @@ export interface ModelTestRecord {
   modelId: string;
   category: TestingCategory;
   result: 'PASS' | 'FAIL' | 'BLOCKED';
+  score?: number;
+  evaluationDetails?: string;
   latencyMs: number;
   tokenUsage?: {
     promptTokens?: number;

@@ -19,13 +19,10 @@ import { Badge } from '../ui/Badge';
 import { Input, Select } from '../ui/Input';
 import { ProviderConfig, ProviderId } from '@/types/provider';
 import { getProviderConfigs, saveProviderConfig } from '@/lib/db/settings';
-import { VERIFIED_MODELS } from '@/lib/providers/registry';
 
 export const ProviderManager: React.FC = () => {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [modelTestingId, setModelTestingId] = useState<string | null>(null);
-  const [modelTestResults, setModelTestResults] = useState<Record<string, { success: boolean; message: string; score?: number; latencyMs?: number }>>({});
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string; latencyMs?: number }>>({});
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
@@ -72,7 +69,7 @@ export const ProviderManager: React.FC = () => {
       apiKey: edit.apiKey,
       accountId: edit.accountId,
       baseUrl: edit.baseUrl,
-      status: edit.apiKey ? 'ready' : 'unconfigured',
+      status: edit.apiKey || provider.id === 'ollama' ? 'ready' : 'unconfigured',
     };
 
     await saveProviderConfig(updated);
@@ -133,40 +130,6 @@ export const ProviderManager: React.FC = () => {
     }
   };
 
-
-  const handleTestModel = async (provider: ProviderConfig) => {
-    const edit = editStates[provider.id] || {};
-    const candidate = VERIFIED_MODELS.find((model) => model.providerId === provider.id && model.capabilities.supportsText);
-    if (!candidate) {
-      setModelTestResults((prev) => ({ ...prev, [provider.id]: { success: false, message: 'Belum ada model teks terdaftar untuk provider ini.' } }));
-      return;
-    }
-    setModelTestingId(provider.id);
-    try {
-      const res = await fetch('/api/providers/model-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ providerId: provider.id, modelId: candidate.id, apiKey: edit.apiKey, accountId: edit.accountId, baseUrl: edit.baseUrl }),
-      });
-      const json = await res.json();
-      setModelTestResults((prev) => ({
-        ...prev,
-        [provider.id]: {
-          success: Boolean(json.success),
-          message: json.success
-            ? `${candidate.id}: tes text berhasil${json.checks?.instructionMatch ? ' dan instruksi cocok' : ', tetapi instruksi tidak cocok'}.`
-            : `${candidate.id}: ${json.error || 'tes model gagal'}`,
-          score: json.score,
-          latencyMs: json.latencyMs,
-        },
-      }));
-    } catch (error: any) {
-      setModelTestResults((prev) => ({ ...prev, [provider.id]: { success: false, message: error?.message || 'Network failure' } }));
-    } finally {
-      setModelTestingId(null);
-    }
-  };
-
   const handleToggleEnable = async (provider: ProviderConfig) => {
     const updated = { ...provider, enabled: !provider.enabled };
     await saveProviderConfig(updated);
@@ -183,7 +146,7 @@ export const ProviderManager: React.FC = () => {
             AI Provider Manager
           </h1>
           <p className="text-xs text-gray-400 mt-1">
-            Konfigurasi ekosistem AI multi-provider terintegrasi (Google Gemini, OpenRouter, NVIDIA NIM, Cloudflare Workers AI, Groq, dan Ollama Cloud).
+            Konfigurasi ekosistem AI multi-provider terintegrasi (Google Gemini, OpenRouter, NVIDIA NIM, Cloudflare Workers AI, Groq, dan Ollama).
           </p>
         </div>
 
@@ -216,7 +179,6 @@ export const ProviderManager: React.FC = () => {
         {providers.map((prov) => {
           const edit = editStates[prov.id] || { apiKey: '', accountId: '', baseUrl: '' };
           const test = testResults[prov.id];
-          const modelTest = modelTestResults[prov.id];
           const isTesting = testingId === prov.id;
 
           return (
@@ -260,7 +222,7 @@ export const ProviderManager: React.FC = () => {
                       {prov.id === 'nvidia' && 'Enterprise Deep Reasoning, Mixtral, Llama 3.1 70B'}
                       {prov.id === 'cloudflare' && 'Serverless Edge AI, FLUX.1 Schnell, Aura TTS'}
                       {prov.id === 'groq' && 'Ultra-Fast LPU Inference >300 tps, Dialogue, Whisper'}
-                      {prov.id === 'ollama' && 'Ollama Cloud (GPT-OSS 120B, Qwen3 Coder, DeepSeek) via API Key'}
+                      {prov.id === 'ollama' && 'Inference AI Lokal (Offline) & Remote Cloud API (API Key & Cloud Models)'}
                     </p>
                   </div>
                 </div>
@@ -275,16 +237,6 @@ export const ProviderManager: React.FC = () => {
                     {prov.enabled ? 'Nonaktifkan' : 'Aktifkan'}
                   </Button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTestModel(prov)}
-                    isLoading={modelTestingId === prov.id}
-                    className="text-xs"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    Tes Model Teks
-                  </Button>
                   <Button
                     variant="cyan"
                     size="sm"
@@ -304,7 +256,7 @@ export const ProviderManager: React.FC = () => {
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-medium text-gray-300">
                       {prov.id === 'ollama'
-                        ? 'Ollama Cloud API Key'
+                        ? 'API Key / Bearer Token'
                         : 'API Key (Multi-Key Pool)'}
                     </label>
                     {edit.apiKey && edit.apiKey.includes(',') && (
@@ -358,7 +310,7 @@ export const ProviderManager: React.FC = () => {
                     onChange={(e) => handleFieldChange(prov.id, 'baseUrl', e.target.value)}
                     placeholder={
                       prov.id === 'ollama'
-                        ? 'https://ollama.com'
+                        ? 'http://localhost:11434 atau https://ollama.com'
                         : prov.id === 'nvidia'
                         ? 'https://integrate.api.nvidia.com/v1'
                         : prov.id === 'openrouter'
@@ -380,12 +332,12 @@ export const ProviderManager: React.FC = () => {
                 </div>
               </div>
 
-              {/* Ollama Cloud guidance */}
+              {/* Ollama local CORS guidance */}
               {prov.id === 'ollama' && (
                 <div className="mt-3 p-3 bg-secondary/50 rounded-lg text-[11px] text-gray-300 flex items-start gap-2">
                   <Info className="w-4 h-4 text-accent-cyan shrink-0 mt-0.5" />
                   <p>
-                    <strong>Ollama Cloud:</strong> pakai endpoint <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">https://ollama.com</code> dan <strong>API Key</strong> dari <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">ollama.com/settings/keys</code>. Tidak perlu daemon lokal. Contoh model: <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">gpt-oss:120b</code>, <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">qwen3-coder:480b</code>.
+                    <strong>Panduan Ollama (Lokal, Remote VPS & Ollama Cloud):</strong> Mendukung endpoint lokal (<code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">http://localhost:11434</code>) maupun remote server / Ollama Cloud (<code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">https://ollama.com</code>). Masukkan <strong>API Key / Bearer Token</strong> untuk autentikasi Cloud atau server berbayar/terproteksi. Sistem mendukung auto-recovery ke cloud model (seperti <code className="bg-black/50 px-1 py-0.5 rounded text-accent-cyan">glm-5.3-flash:cloud</code>) dan rotasi multi-key.
                   </p>
                 </div>
               )}
@@ -412,16 +364,6 @@ export const ProviderManager: React.FC = () => {
                       </p>
                     )}
                   </div>
-                </div>
-              )}
-
-              {modelTest && (
-                <div className={`mt-3 p-3 rounded-xl text-xs ${modelTest.success ? 'bg-emerald-950/40 border border-emerald-800 text-emerald-300' : 'bg-red-950/40 border border-red-800 text-red-300'}`}>
-                  <p className="font-semibold">{modelTest.success ? 'Tes kemampuan model teks' : 'Tes model gagal'}</p>
-                  <p className="mt-1">{modelTest.message}</p>
-                  {modelTest.score !== undefined && <p className="mt-1">Skor smoke-test: {modelTest.score}/100</p>}
-                  {modelTest.latencyMs !== undefined && <p className="mt-1 font-mono">Latency: {modelTest.latencyMs}ms</p>}
-                  <p className="mt-1 opacity-70">Tes ini hanya memverifikasi text generation, bukan kemampuan vision/image/audio/video atau benchmark kualitas penuh.</p>
                 </div>
               )}
             </div>

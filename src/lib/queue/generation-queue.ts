@@ -1,6 +1,7 @@
 import { GenerationJob, JobStatus } from '@/types/generation';
 import { TaskType, ProviderId } from '@/types/provider';
 import { getProviderConfigs, getRouterConfig } from '../db/settings';
+import { getSpecializations } from '../db/model-intelligence';
 import { AIRouter } from '../router/ai-router';
 import { saveMediaBlob } from '../db/media';
 import { addHistoryItem } from '../db/history';
@@ -53,6 +54,7 @@ class JobQueueManager {
   }): Promise<string> {
     const providerConfigs = await getProviderConfigs();
     const routerConfig = await getRouterConfig();
+    const specializations = await getSpecializations();
 
     const modality =
       params.taskType === 'image'
@@ -64,7 +66,14 @@ class JobQueueManager {
         : 'text';
 
     const preferredModel = params.params?.model;
-    const route = AIRouter.resolveRoute(params.taskType, routerConfig, providerConfigs, [], preferredModel);
+    const route = AIRouter.resolveRoute(
+      params.taskType,
+      routerConfig,
+      providerConfigs,
+      [],
+      preferredModel,
+      specializations
+    );
 
     const jobId = 'job_' + Math.random().toString(36).substring(2, 9) + Date.now();
     const job: GenerationJob = {
@@ -257,6 +266,7 @@ class JobQueueManager {
         console.warn(`Provider ${currentRoute.providerId} failed: ${lastError}. Checking fallback...`);
 
         // Attempt fallback routing
+        const specializations = await getSpecializations();
         const fallback = AIRouter.getFallbackRoute(
           job.taskType,
           currentRoute.providerId,
@@ -264,7 +274,8 @@ class JobQueueManager {
           lastError,
           routerConfig,
           providerConfigs,
-          triedProviders
+          triedProviders,
+          specializations
         );
 
         if (fallback) {

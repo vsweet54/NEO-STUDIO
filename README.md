@@ -61,7 +61,7 @@
 | **NVIDIA NIM API** | Enterprise Cloud | Deep Reasoning & Story Planning | `meta/llama-3.1-70b-instruct`, `deepseek-ai/deepseek-r1` |
 | **Cloudflare Workers AI** | Serverless Edge | Edge Text, FLUX.1 Image, Aura TTS | `@cf/meta/llama-3.1-8b-instruct`, `@cf/black-forest-labs/flux-1-schnell`, `@cf/deepgram/aura-tts` |
 | **Groq API** | Ultra-Fast LPU | High-Speed Dialogue, Script, STT | `llama-3.3-70b-versatile`, `whisper-large-v3` |
-| **Ollama Cloud** | `https://ollama.com` | Cloud inference via API Key | `gpt-oss:120b`, `qwen3-coder:480b` |
+| **Ollama API** | Local & Remote Host | Offline Inference / Cloud Proxy | `llama3.2`, `qwen2.5`, `mistral` |
 
 > [!TIP]
 > **Multi-API Key Pool & Cloudflare Paired Rotation:**  
@@ -73,7 +73,9 @@
 > - **OpenRouter API** mendukung multi-key pool (`sk-or-v1-key1, sk-or-v1-key2`) dengan rotasi otomatis saat 429.
 
 > [!IMPORTANT]
-> **Ollama Cloud:** Base URL `https://ollama.com` + API Key dari https://ollama.com/settings/keys. Tidak perlu daemon lokal.
+> **Panduan Endpoint Ollama (Lokal & Remote Server dengan API Key):**  
+> - **Lokal**: Masukkan `http://localhost:11434` dan jalankan dengan `OLLAMA_ORIGINS="*" ollama serve`.  
+> - **Remote Host / Cloud Server**: Masukkan URL remote (misal: `https://ollama.domain.com`) dan masukkan **API Key / Bearer Token** jika host diproteksi autentikasi (Reverse Proxy, NGINX, Cloudflare Tunnel/Access).
 
 ---
 
@@ -100,29 +102,3 @@ node tests/smoke-test.js
 
 ## 5. Lisensi & Hak Cipta
 NEO STUDIO AI © 2026. Dikembangkan sebagai sistem mandiri berstandar rekayasa perangkat lunak senior.
-
-
-## 6. Pengujian Model Teks (Capability Smoke Test)
-
-Menu **AI Provider Manager** menyediakan dua jenis pemeriksaan yang berbeda:
-
-- **Test Koneksi** memeriksa akses provider dan autentikasi.
-- **Tes Model Teks** menjalankan inference sungguhan pada satu model teks pertama yang terdaftar untuk provider tersebut, lalu memeriksa apakah output tidak kosong dan apakah instruksi uji dipatuhi.
-
-Endpoint internal: `POST /api/providers/model-test`.
-
-Contoh payload (kirim melalui UI agar kredensial tidak ditulis ke terminal atau log):
-
-```json
-{
-  "providerId": "groq",
-  "modelId": "llama-3.3-70b-versatile",
-  "apiKey": "<API_KEY>"
-}
-```
-
-Respons memuat `capabilityTested`, `capabilityVerified`, `checks`, `score`, `latencyMs`, dan `outputPreview`. Skor adalah smoke-test sederhana, bukan benchmark kualitas atau bukti model gratis. Tes ini menggunakan inference sungguhan dan dapat mengonsumsi kuota/biaya provider.
-
-Untuk provider yang mendukung Base URL kustom, validasi server membatasi protokol/host untuk mengurangi risiko SSRF dan kebocoran kredensial. Ollama hanya diizinkan ke `https://ollama.com` (config localhost lama diabaikan).
-
-**Batasan saat ini:** endpoint ini baru memverifikasi text generation untuk satu model terpilih per provider. Belum melakukan benchmark semua model, tes vision, image/audio/video, deteksi harga, penyimpanan hasil historis, atau pemeringkatan otomatis lintas tugas. Jangan menyebut model sebagai image/video/audio generator sebelum tes modality khusus menghasilkan artefak yang benar.

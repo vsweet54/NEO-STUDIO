@@ -22,6 +22,7 @@ import {
   FileSpreadsheet,
   Layers,
   HelpCircle,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
@@ -35,6 +36,7 @@ export type NavigationTab =
   | 'voice-over'
   | 'creative-tools'
   | 'providers'
+  | 'model-lab'
   | 'history'
   | 'settings';
 
@@ -99,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               AI
             </span>
           </div>
-          <p className="text-[11px] text-gray-400 truncate">AI Storyboard & Video</p>
+          <p className="text-[11px] text-gray-400 truncate">AI Storyboard & Video by xyrons</p>
         </div>
       </div>
 
@@ -298,6 +300,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <Cpu className="w-4 h-4 shrink-0 text-cyan-400" />
           <span>AI Provider Manager</span>
+        </button>
+
+        {/* Model Intelligence Lab */}
+        <button
+          onClick={() => handleNavClick('model-lab')}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium',
+            currentTab === 'model-lab'
+              ? 'bg-accent-purple/20 text-accent-purple border border-accent-purple/40 font-semibold'
+              : 'hover:bg-secondary/60 text-gray-300'
+          )}
+        >
+          <FlaskConical className="w-4 h-4 shrink-0 text-accent-purple" />
+          <div className="flex items-center justify-between flex-1">
+            <span>Model Intelligence Lab</span>
+            <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-accent-purple/30 text-purple-300">
+              NEW
+            </span>
+          </div>
         </button>
 
         {/* Generation History */}

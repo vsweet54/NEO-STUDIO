@@ -143,43 +143,71 @@ export class ModelSpecializationEngine {
         continue;
       }
 
-      // 1. Find Best Free Model
-      const freeCandidates = candidateModels.filter(
+      // Helper to compute objective task score based on actual benchmark scores and test status
+      const getObjectiveScore = (m: DiscoveredModel): number => {
+        const scores = m.benchmarkScores || {};
+        let score = 0;
+
+        if (spec.task === 'coding' || spec.task === 'debugging') {
+          score = scores.coding ?? (m.roles.includes('CODING') ? 70 : 20);
+        } else if (spec.task === 'vision') {
+          score = scores.vision ?? (m.capabilities.supportsVision ? 70 : 20);
+        } else if (spec.task === 'image-generation') {
+          score = scores.imageGen ?? (m.capabilities.supportsImageGen ? 70 : 20);
+        } else if (spec.task === 'tts' || spec.task === 'stt') {
+          score = scores.audio ?? (m.capabilities.supportsAudioGen || m.capabilities.supportsAudioInput ? 70 : 20);
+        } else if (spec.task === 'reasoning') {
+          score = scores.reasoning ?? (m.roles.includes('REASONING') ? 75 : 40);
+        } else {
+          score = scores.generalChat ?? scores.overallScore ?? (m.roles.includes(spec.requiredRole) ? 70 : 50);
+        }
+
+        // Test status modifier
+        if (m.testStatus === 'PASS') score += 15;
+        else if (m.testStatus === 'FAIL') score -= 40;
+        else if (m.testStatus === 'BLOCKED') score -= 20;
+
+        return score;
+      };
+
+      // Sort candidate models by objective score descending
+      const rankedCandidates = [...candidateModels].sort((a, b) => {
+        return getObjectiveScore(b) - getObjectiveScore(a);
+      });
+
+      // 1. Primary Model: Top ranked candidate
+      const primary = rankedCandidates[0]?.id || candidateModels[0]?.id;
+
+      // 2. Secondary Model: Second highest candidate or alternate provider
+      const secondaryCandidates = rankedCandidates.filter((m) => m.id !== primary);
+      const secondaryAlternate = secondaryCandidates.find(
+        (m) => m.provider !== rankedCandidates[0]?.provider
+      );
+      const secondary = secondaryAlternate?.id || secondaryCandidates[0]?.id || primary;
+
+      // 3. Fast Model: Passing candidate with lowest latency
+      const passingCandidates = candidateModels.filter((m) => m.testStatus === 'PASS');
+      const poolForFast = passingCandidates.length > 0 ? passingCandidates : candidateModels;
+      const fastCandidates = [...poolForFast].sort((a, b) => {
+        const latA = a.latencyMs || 9999;
+        const latB = b.latencyMs || 9999;
+        return latA - latB;
+      });
+      const fastModel = fastCandidates[0]?.id || primary;
+
+      // 4. Best Free Model: Highest ranked free or free-limited model
+      const freeCandidates = rankedCandidates.filter(
         (m) =>
           m.pricing.classification === 'FREE' ||
           m.pricing.classification === 'FREE_LIMITED'
       );
-      const bestFree = freeCandidates[0]?.id || candidateModels[0]?.id;
+      const bestFree = freeCandidates[0]?.id || primary;
 
-      // 2. Find Fast Model (prefer models with low latency or known lightweight weights)
-      const fastCandidates = [...candidateModels].sort((a, b) => {
-        const latA = a.latencyMs || 500;
-        const latB = b.latencyMs || 500;
-        return latA - latB;
-      });
-      const fastModel = fastCandidates[0]?.id;
-
-      // 3. Find Primary Model
-      // Prioritize verified active models, preferring zero-cost or official free-tier models
-      let primary = candidateModels[0]?.id;
-      if (spec.task === 'image-generation') {
-        // Cloudflare FLUX.1 is the most universally accessible free GPU model
-        const flux = candidateModels.find((m) => m.id.includes('flux'));
-        if (flux) primary = flux.id;
-      } else if (spec.task === 'reasoning') {
-        const r1 = candidateModels.find((m) => m.id.includes('r1'));
-        if (r1) primary = r1.id;
-      } else if (spec.task === 'coding') {
-        const coder = candidateModels.find((m) => m.id.includes('claude') || m.id.includes('qwen') || m.id.includes('coder') || m.id.includes('deepseek'));
-        if (coder) primary = coder.id;
-      } else if (spec.task === 'storyboard' || spec.task === 'general-chat') {
-        const geminiFlash = candidateModels.find((m) => m.id === 'gemini-2.5-flash');
-        if (geminiFlash) primary = geminiFlash.id;
-      }
-
-      // 4. Secondary & Backup
-      const secondary = candidateModels.find((m) => m.id !== primary)?.id || primary;
-      const backup = candidateModels.find((m) => m.id !== primary && m.id !== secondary)?.id || bestFree;
+      // 5. Backup Model: Alternate provider backup
+      const backupCandidate = rankedCandidates.find(
+        (m) => m.id !== primary && m.id !== secondary && m.provider !== rankedCandidates[0]?.provider
+      );
+      const backup = backupCandidate?.id || bestFree;
 
       updatedConfigs[spec.task] = {
         task: spec.task,

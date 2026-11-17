@@ -3,8 +3,8 @@ import { ModelDefinition } from '@/types/provider';
 export const VERIFIED_MODELS: ModelDefinition[] = [
   // --- GOOGLE GEMINI ---
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
     providerId: 'gemini',
     capabilities: {
       supportsText: true,
@@ -76,8 +76,8 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
 
   // --- NVIDIA NIM ---
   {
-    id: 'meta/llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B Instruct (NVIDIA NIM)',
+    id: 'meta/llama-3.1-70b-instruct',
+    name: 'Llama 3.1 70B Instruct (NVIDIA NIM)',
     providerId: 'nvidia',
     capabilities: {
       supportsText: true,
@@ -204,8 +204,8 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
     isDefault: true,
   },
   {
-    id: 'llama3-8b-8192',
-    name: 'Llama 3 8B (Groq LPU)',
+    id: 'llama-3.1-8b-instant',
+    name: 'Llama 3.1 8B Instant (Groq LPU)',
     providerId: 'groq',
     capabilities: {
       supportsText: true,
@@ -213,7 +213,7 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
       supportsVideoGen: false,
       supportsAudioGen: false,
       supportsVision: false,
-      maxContextTokens: 8192,
+      maxContextTokens: 131072,
       isLocal: false,
       costPer1kTokens: 0.00008,
     },
@@ -238,10 +238,28 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
     isDefault: true,
   },
 
-  // --- OLLAMA (CLOUD) ---
+  // --- OLLAMA (LOCAL & CLOUD) ---
   {
-    id: 'gpt-oss:120b',
-    name: 'GPT-OSS 120B (Ollama Cloud)',
+    id: 'glm-5.3-flash:cloud',
+    name: 'GLM 5.3 Flash (Ollama Cloud)',
+    providerId: 'ollama',
+    capabilities: {
+      supportsText: true,
+      supportsImageGen: false,
+      supportsVideoGen: false,
+      supportsAudioGen: false,
+      supportsVision: false,
+      maxContextTokens: 131072,
+      isLocal: false,
+      costPer1kTokens: 0.0,
+    },
+    description: 'Model Ollama Cloud generasi terbaru dengan inferensi ultra-cepat dan penalaran tangguh.',
+    recommendedFor: ['story', 'dialogue', 'prompt-engineering'],
+    isDefault: true,
+  },
+  {
+    id: 'llama3.2',
+    name: 'Llama 3.2 (Local & Cloud Ollama)',
     providerId: 'ollama',
     capabilities: {
       supportsText: true,
@@ -250,16 +268,15 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
       supportsAudioGen: false,
       supportsVision: true,
       maxContextTokens: 131072,
-      isLocal: false,
+      isLocal: true,
       costPer1kTokens: 0.0,
     },
-    description: 'Model open-weight 120B via Ollama Cloud.',
+    description: 'Model open-source privasi penuh lokal atau remote tanpa biaya API.',
     recommendedFor: ['story', 'dialogue', 'prompt-engineering'],
-    isDefault: true,
   },
   {
-    id: 'qwen3-coder:480b',
-    name: 'Qwen3 Coder 480B (Ollama Cloud)',
+    id: 'qwen2.5',
+    name: 'Qwen 2.5 (Local & Cloud Ollama)',
     providerId: 'ollama',
     capabilities: {
       supportsText: true,
@@ -268,10 +285,10 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
       supportsAudioGen: false,
       supportsVision: false,
       maxContextTokens: 32768,
-      isLocal: false,
+      isLocal: true,
       costPer1kTokens: 0.0,
     },
-    description: 'Model coding & instruksi besar via Ollama Cloud.',
+    description: 'Model instruksi presisi dan penulisan cerita yang sangat kuat.',
     recommendedFor: ['story', 'dialogue'],
   },
 
@@ -329,8 +346,8 @@ export const VERIFIED_MODELS: ModelDefinition[] = [
     recommendedFor: ['dialogue', 'prompt-engineering'],
   },
   {
-    id: 'google/gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash (OpenRouter)',
+    id: 'google/gemini-2.0-flash-001',
+    name: 'Gemini 2.0 Flash (OpenRouter)',
     providerId: 'openrouter',
     capabilities: {
       supportsText: true,

@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
           apiKey = pairs.map((p) => p.apiKey).join(',');
           accountId = pairs.map((p) => p.accountId).join(',');
         } else if (pid === 'ollama') {
-          baseUrl = process.env.OLLAMA_BASE_URL || 'https://ollama.com';
+          apiKey = KeyPool.getKeys('', ['OLLAMA_API_KEY', 'OLLAMA_API_KEYS']).join(',');
+          baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
         }
 
         return {

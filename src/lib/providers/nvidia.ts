@@ -57,7 +57,7 @@ export class NvidiaAdapter {
   ): Promise<ProviderExecutionResult<{ text: string; rawResponse?: any }>> {
     const start = Date.now();
     const endpoint = baseUrl || 'https://integrate.api.nvidia.com/v1';
-    const model = options.model || 'meta/llama-3.3-70b-instruct';
+    const model = options.model || 'meta/llama-3.1-70b-instruct';
 
     try {
       const messages: any[] = [];

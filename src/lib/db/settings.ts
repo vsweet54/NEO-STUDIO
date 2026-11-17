@@ -7,7 +7,7 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     name: 'Google Gemini API',
     enabled: true,
     status: 'unconfigured',
-    defaultTextModel: 'gemini-2.5-flash',
+    defaultTextModel: 'gemini-2.0-flash',
     defaultImageModel: 'imagen-3.0-generate-002',
     defaultVideoModel: 'veo-2.0-generate-001',
   },
@@ -17,7 +17,7 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     enabled: true,
     status: 'unconfigured',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    defaultTextModel: 'meta/llama-3.3-70b-instruct',
+    defaultTextModel: 'meta/llama-3.1-70b-instruct',
   },
   {
     id: 'cloudflare',
@@ -38,11 +38,11 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
   },
   {
     id: 'ollama',
-    name: 'Ollama (Cloud)',
+    name: 'Ollama (Local AI)',
     enabled: false,
     status: 'unconfigured',
-    baseUrl: 'https://ollama.com',
-    defaultTextModel: 'gpt-oss:120b',
+    baseUrl: 'http://localhost:11434',
+    defaultTextModel: 'llama3.2',
   },
   {
     id: 'openrouter',
@@ -56,11 +56,11 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
 const DEFAULT_ROUTER: RouterConfig = {
   mode: 'auto',
   manualAssignments: {
-    story: { providerId: 'gemini', modelId: 'gemini-2.5-flash' },
-    script: { providerId: 'gemini', modelId: 'gemini-2.5-flash' },
-    storyboard: { providerId: 'gemini', modelId: 'gemini-2.5-flash' },
+    story: { providerId: 'gemini', modelId: 'gemini-2.0-flash' },
+    script: { providerId: 'gemini', modelId: 'gemini-2.0-flash' },
+    storyboard: { providerId: 'gemini', modelId: 'gemini-2.0-flash' },
     dialogue: { providerId: 'groq', modelId: 'llama-3.3-70b-versatile' },
-    'character-analysis': { providerId: 'nvidia', modelId: 'meta/llama-3.3-70b-instruct' },
+    'character-analysis': { providerId: 'nvidia', modelId: 'meta/llama-3.1-70b-instruct' },
     'prompt-engineering': { providerId: 'groq', modelId: 'llama-3.3-70b-versatile' },
     image: { providerId: 'gemini', modelId: 'imagen-3.0-generate-002' },
     video: { providerId: 'gemini', modelId: 'veo-2.0-generate-001' },
@@ -92,24 +92,7 @@ export async function getProviderConfigs(): Promise<ProviderConfig[]> {
     await setSetting('providers_config', DEFAULT_PROVIDERS);
     return DEFAULT_PROVIDERS;
   }
-  // Migrasi: config Ollama lama (lokal) -> Ollama Cloud
-  let migrated = false;
-  const fixed = stored.map((p) => {
-    if (p.id !== 'ollama') return p;
-    const isLocalUrl = !p.baseUrl || /localhost|127\.0\.0\.1|^http:/i.test(p.baseUrl);
-    const oldModel = !p.defaultTextModel || p.defaultTextModel === 'llama3.2' || p.defaultTextModel === 'qwen2.5';
-    if (!isLocalUrl && !oldModel && p.name === 'Ollama (Cloud)') return p;
-    migrated = true;
-    return {
-      ...p,
-      name: 'Ollama (Cloud)',
-      baseUrl: isLocalUrl ? 'https://ollama.com' : p.baseUrl,
-      defaultTextModel: oldModel ? 'gpt-oss:120b' : p.defaultTextModel,
-      status: p.apiKey ? p.status : 'unconfigured',
-    } as ProviderConfig;
-  });
-  if (migrated) await setSetting('providers_config', fixed);
-  return fixed;
+  return stored;
 }
 
 export async function saveProviderConfig(config: ProviderConfig): Promise<void> {

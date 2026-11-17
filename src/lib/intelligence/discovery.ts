@@ -424,8 +424,14 @@ export class ModelDiscoveryEngine {
     prov: ProviderConfig,
     serverEnvFallback: boolean
   ): Promise<DiscoveredModel[]> {
-    const endpoint = (prov.baseUrl || process.env.OLLAMA_BASE_URL || 'https://ollama.com').replace(/\/$/, '');
+    const endpoint = (prov.baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
     const keys = KeyPool.getKeys(prov.apiKey, serverEnvFallback ? ['OLLAMA_API_KEY', 'OLLAMA_API_KEYS'] : []);
+    const isRemoteOrCloud = Boolean(
+      endpoint &&
+      !endpoint.includes('localhost') &&
+      !endpoint.includes('127.0.0.1') &&
+      !endpoint.includes('0.0.0.0')
+    );
 
     try {
       const headers: Record<string, string> = {};
@@ -443,30 +449,35 @@ export class ModelDiscoveryEngine {
         const rawModels: any[] = json.models || [];
         if (rawModels.length > 0) {
           return rawModels.map((m) => {
-            const id = m.name;
+            const id = m.name || m.model;
+            const isCloudModel = isRemoteOrCloud || id.includes(':cloud');
             const capabilities: ModelCapabilities = {
               supportsText: true,
               supportsImageGen: false,
               supportsVideoGen: false,
               supportsAudioGen: false,
-              supportsVision: id.includes('llava') || id.includes('vision'),
+              supportsVision: id.includes('llava') || id.includes('vision') || id.includes('vl'),
               supportsAudioInput: false,
-              maxContextTokens: 32768,
-              isLocal: false,
+              maxContextTokens: 65536,
+              isLocal: !isCloudModel,
             };
             return {
               id,
               name: id,
               provider: 'ollama',
-              description: `Model Ollama Cloud ${id}`,
+              description: isCloudModel
+                ? `Model Ollama Cloud / Remote API: ${id}`
+                : `Model AI lokal ${id} (100% Offline Privasi Penuh)`,
               capabilities,
               roles: this.assignRoles(id, id, capabilities),
               pricing: {
-                classification: 'FREE',
+                classification: isCloudModel ? (keys.length > 0 ? 'FREE_LIMITED' : 'FREE') : 'FREE',
                 verified: true,
-                source: 'Ollama Cloud',
+                source: isCloudModel ? 'Ollama Cloud / Remote API' : 'Ollama Local Daemon',
                 lastChecked: Date.now(),
-                notes: 'Ollama Cloud (kuota sesuai akun Ollama)',
+                notes: isCloudModel
+                  ? 'Remote endpoint inference (Cloud / API Key authenticated)'
+                  : 'Local hardware execution (Zero API Cost)',
               },
               availability: 'available',
               authentication: 'passed',
@@ -479,7 +490,7 @@ export class ModelDiscoveryEngine {
       // Return curated fallback
     }
 
-    return this.getOllamaFallbackCatalog(keys.length > 0);
+    return this.getOllamaFallbackCatalog(keys.length > 0 || !isRemoteOrCloud);
   }
 
   /**
@@ -524,7 +535,8 @@ export class ModelDiscoveryEngine {
         lower.includes('think') ||
         lower.includes('o1') ||
         lower.includes('pro') ||
-        lower.includes('claude-3-5')
+        lower.includes('claude-3-5') ||
+        lower.includes('glm')
       ) {
         roles.add('REASONING');
         roles.add('WEB_RESEARCH');
@@ -536,7 +548,8 @@ export class ModelDiscoveryEngine {
         lower.includes('qwen') ||
         lower.includes('deepseek') ||
         lower.includes('claude') ||
-        lower.includes('llama-3')
+        lower.includes('llama-3') ||
+        lower.includes('glm')
       ) {
         roles.add('CODING');
         roles.add('DEBUGGING');
@@ -559,7 +572,7 @@ export class ModelDiscoveryEngine {
   private static getGeminiFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'gemini-2.5-flash',
+        id: 'gemini-2.0-flash',
         name: 'Gemini 2.0 Flash',
         provider: 'gemini',
         description: 'Generasi tercepat multimodal dengan reasoning tinggi dan latency sangat rendah.',
@@ -648,7 +661,7 @@ export class ModelDiscoveryEngine {
   private static getGroqFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'llama3-8b-8192',
+        id: 'llama-3.1-8b-instant',
         name: 'Llama 3.1 8B Instant',
         provider: 'groq',
         description: 'Model ultra cepat (>500 tps) bertenaga Groq LPU, tersedia untuk semua tier akun.',
@@ -763,7 +776,7 @@ export class ModelDiscoveryEngine {
   private static getNvidiaFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'meta/llama-3.3-70b-instruct',
+        id: 'meta/llama-3.1-70b-instruct',
         name: 'Llama 3.1 70B Instruct (NVIDIA NIM)',
         provider: 'nvidia',
         description: 'Model enterprise di-host dengan akselerasi TensorRT-LLM NVIDIA.',
@@ -899,10 +912,10 @@ export class ModelDiscoveryEngine {
   private static getOllamaFallbackCatalog(authenticated: boolean): DiscoveredModel[] {
     return [
       {
-        id: 'gpt-oss:120b',
-        name: 'GPT-OSS 120B (Ollama Cloud)',
+        id: 'glm-5.3-flash:cloud',
+        name: 'GLM 5.3 Flash (Ollama Cloud)',
         provider: 'ollama',
-        description: 'Model open-weight 120B via Ollama Cloud, kuat untuk chat, reasoning, dan penulisan.',
+        description: 'Model Ollama Cloud generasi terbaru dengan inferensi ultra-cepat dan penalaran tangguh.',
         capabilities: {
           supportsText: true,
           supportsImageGen: false,
@@ -913,17 +926,44 @@ export class ModelDiscoveryEngine {
           maxContextTokens: 131072,
           isLocal: false,
         },
+        roles: ['GENERAL_CHAT', 'REASONING', 'CODING', 'WRITING', 'STORYBOARD'],
+        pricing: {
+          classification: authenticated ? 'FREE_LIMITED' : 'FREE',
+          verified: true,
+          source: 'Ollama Cloud API',
+          lastChecked: Date.now(),
+          notes: 'Remote cloud endpoint inference',
+        },
+        availability: 'available',
+        authentication: authenticated ? 'passed' : 'untested',
+        testStatus: 'READY',
+      },
+      {
+        id: 'llama3.2',
+        name: 'Llama 3.2 (Local & Cloud)',
+        provider: 'ollama',
+        description: 'Model open-source efisien untuk percakapan, coding, dan penulisan cerita.',
+        capabilities: {
+          supportsText: true,
+          supportsImageGen: false,
+          supportsVideoGen: false,
+          supportsAudioGen: false,
+          supportsVision: false,
+          supportsAudioInput: false,
+          maxContextTokens: 131072,
+          isLocal: true,
+        },
         roles: ['GENERAL_CHAT', 'CODING', 'WRITING', 'STORYBOARD'],
-        pricing: { classification: 'FREE', verified: true, source: 'Ollama Cloud', lastChecked: Date.now() },
+        pricing: { classification: 'FREE', verified: true, source: 'Ollama Engine', lastChecked: Date.now() },
         availability: 'available',
         authentication: 'passed',
         testStatus: 'READY',
       },
       {
-        id: 'qwen3-coder:480b',
-        name: 'Qwen3 Coder 480B (Ollama Cloud)',
+        id: 'qwen2.5',
+        name: 'Qwen 2.5 (Local & Cloud)',
         provider: 'ollama',
-        description: 'Model coding & instruksi besar via Ollama Cloud.',
+        description: 'Model berkapabilitas instruksi presisi dan penulisan cerita yang sangat kuat.',
         capabilities: {
           supportsText: true,
           supportsImageGen: false,
@@ -932,12 +972,38 @@ export class ModelDiscoveryEngine {
           supportsVision: false,
           supportsAudioInput: false,
           maxContextTokens: 32768,
-          isLocal: false,
+          isLocal: true,
         },
         roles: ['CODING', 'REASONING', 'WRITING', 'GENERAL_CHAT'],
-        pricing: { classification: 'FREE', verified: true, source: 'Ollama Cloud', lastChecked: Date.now() },
+        pricing: { classification: 'FREE', verified: true, source: 'Ollama Engine', lastChecked: Date.now() },
         availability: 'available',
         authentication: 'passed',
+        testStatus: 'READY',
+      },
+      {
+        id: 'deepseek-r1:cloud',
+        name: 'DeepSeek R1 (Ollama Cloud)',
+        provider: 'ollama',
+        description: 'Model penalaran rantai pemikiran (CoT) mendalam yang berjalan di Ollama Cloud.',
+        capabilities: {
+          supportsText: true,
+          supportsImageGen: false,
+          supportsVideoGen: false,
+          supportsAudioGen: false,
+          supportsVision: false,
+          supportsAudioInput: false,
+          maxContextTokens: 65536,
+          isLocal: false,
+        },
+        roles: ['REASONING', 'CODING', 'DEBUGGING'],
+        pricing: {
+          classification: authenticated ? 'FREE_LIMITED' : 'FREE',
+          verified: true,
+          source: 'Ollama Cloud API',
+          lastChecked: Date.now(),
+        },
+        availability: 'available',
+        authentication: authenticated ? 'passed' : 'untested',
         testStatus: 'READY',
       },
     ];

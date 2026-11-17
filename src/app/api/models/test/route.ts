@@ -46,18 +46,60 @@ export async function POST(req: NextRequest) {
         provConfig.accountId = pairs.map((p) => p.accountId).join(',');
       }
     } else if (model.provider === 'ollama') {
-      provConfig.baseUrl = provConfig.baseUrl || process.env.OLLAMA_BASE_URL || 'https://ollama.com';
+      if (!provConfig.apiKey) {
+        provConfig.apiKey = KeyPool.getKeys('', ['OLLAMA_API_KEY', 'OLLAMA_API_KEYS']).join(',');
+      }
+      provConfig.baseUrl = provConfig.baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
     }
 
     const record: ModelTestRecord = await ModelTestingEngine.testModel(model, provConfig, options);
 
-    // Update model state reflecting test outcome
+    // Compute updated benchmarkScores
+    const currentScores = model.benchmarkScores || {};
+    const updatedScores = { ...currentScores };
+
+    if (record.category === 'TEXT') {
+      updatedScores.generalChat = record.score;
+      if (model.roles.includes('REASONING')) {
+        updatedScores.reasoning = record.score;
+      }
+    } else if (record.category === 'CODING') {
+      updatedScores.coding = record.score;
+    } else if (record.category === 'VISION') {
+      updatedScores.vision = record.score;
+    } else if (record.category === 'IMAGE_GEN') {
+      updatedScores.imageGen = record.score;
+    } else if (record.category === 'AUDIO') {
+      updatedScores.audio = record.score;
+    }
+
+    const scoreValues = [
+      updatedScores.generalChat,
+      updatedScores.reasoning,
+      updatedScores.coding,
+      updatedScores.vision,
+      updatedScores.imageGen,
+      updatedScores.audio,
+    ].filter((v): v is number => typeof v === 'number');
+
+    if (scoreValues.length > 0) {
+      updatedScores.overallScore = Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length);
+    }
+    updatedScores.lastEvaluatedAt = Date.now();
+
+    // Update model state reflecting test outcome & objective benchmark scores
     const updatedModel: DiscoveredModel = {
       ...model,
       testStatus: record.result === 'PASS' ? 'PASS' : record.result === 'BLOCKED' ? 'BLOCKED' : 'FAIL',
       authentication: record.result === 'PASS' ? 'passed' : 'failed',
       lastTestedAt: record.timestamp,
       latencyMs: record.latencyMs,
+      benchmarkScores: updatedScores,
+      performance: {
+        qualityScore: updatedScores.overallScore || record.score || 0,
+        latencyScore: Math.max(10, Math.min(100, Math.round(100 - record.latencyMs / 50))),
+        reliabilityScore: record.result === 'PASS' ? 100 : 0,
+      },
       tokenUsage: record.tokenUsage,
       errorInfo:
         record.result !== 'PASS'

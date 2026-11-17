@@ -15,6 +15,7 @@ import { VideoStudio } from '@/components/video-gen/VideoStudio';
 import { VoiceOverStudio } from '@/components/audio/VoiceOverStudio';
 import { CreativeToolsHub } from '@/components/creative-tools/CreativeToolsHub';
 import { ProviderManager } from '@/components/providers/ProviderManager';
+import { ModelLabView } from '@/components/models/ModelLabView';
 import { GenerationHistoryView } from '@/components/history/GenerationHistoryView';
 import { SettingsView } from '@/components/settings/SettingsView';
 
@@ -196,6 +197,10 @@ export default function Home() {
 
           {currentTab === 'providers' && (
             <ProviderManager />
+          )}
+
+          {currentTab === 'model-lab' && (
+            <ModelLabView />
           )}
 
           {currentTab === 'history' && (

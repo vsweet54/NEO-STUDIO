@@ -93,9 +93,9 @@ export class GroqAdapter {
         const msg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
 
         // If 70B model is not available or restricted on this Groq tier, auto retry with 8B instant
-        if ((msg.includes('does not exist') || msg.includes('do not have access')) && model !== 'llama3-8b-8192') {
-          console.warn(`[Groq] Model ${model} not available on account tier. Retrying with llama3-8b-8192...`);
-          return this.generateText(apiKey, { ...options, model: 'llama3-8b-8192' }, baseUrl);
+        if ((msg.includes('does not exist') || msg.includes('do not have access')) && model !== 'llama-3.1-8b-instant') {
+          console.warn(`[Groq] Model ${model} not available on account tier. Retrying with llama-3.1-8b-instant...`);
+          return this.generateText(apiKey, { ...options, model: 'llama-3.1-8b-instant' }, baseUrl);
         }
 
         return {

@@ -3,7 +3,6 @@ import { Project, Episode, Scene } from '@/types/project';
 import { Character } from '@/types/character';
 import { GenerationHistoryItem, MediaBlobRecord } from '@/types/generation';
 import { ProviderConfig, RouterConfig } from '@/types/provider';
-import { ModelTestRecord, TaskSpecializationConfig } from '@/types/model-intelligence';
 
 export interface NeoStudioDBSchema extends DBSchema {
   projects: {
@@ -64,27 +63,32 @@ export interface NeoStudioDBSchema extends DBSchema {
       updatedAt: number;
     };
   };
-  // Dynamic model catalog populated by model discovery.
-  // `any` keeps this DB boundary compatible with the provider-specific model metadata.
   discovered_models: {
     key: string;
-    value: any;
+    value: import('@/types/model-intelligence').DiscoveredModel;
+    indexes: {
+      'by-provider': string;
+      'by-pricing': string;
+      'by-status': string;
+    };
   };
   test_history: {
     key: string;
-    value: ModelTestRecord;
+    value: import('@/types/model-intelligence').ModelTestRecord;
     indexes: {
+      'by-model': string;
+      'by-status': string;
       'by-timestamp': number;
     };
   };
   specializations: {
     key: string;
-    value: TaskSpecializationConfig;
+    value: import('@/types/model-intelligence').TaskSpecializationConfig;
   };
 }
 
 const DB_NAME = 'neo_studio_ai_db';
-const DB_VERSION = 3;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<NeoStudioDBSchema>> | null = null;
 
@@ -95,7 +99,7 @@ export function getDB(): Promise<IDBPDatabase<NeoStudioDBSchema>> {
 
   if (!dbPromise) {
     dbPromise = openDB<NeoStudioDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
         // Projects Store
         if (!db.objectStoreNames.contains('projects')) {
           const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
@@ -145,19 +149,23 @@ export function getDB(): Promise<IDBPDatabase<NeoStudioDBSchema>> {
           db.createObjectStore('settings', { keyPath: 'key' });
         }
 
-        // Discovered Models Store (added in DB version 2).
-        // Existing stores and user data are preserved during this upgrade.
+        // Discovered Models Store (v2)
         if (!db.objectStoreNames.contains('discovered_models')) {
-          db.createObjectStore('discovered_models', { keyPath: 'id' });
+          const modelStore = db.createObjectStore('discovered_models', { keyPath: 'id' });
+          modelStore.createIndex('by-provider', 'provider');
+          modelStore.createIndex('by-pricing', 'pricing.classification');
+          modelStore.createIndex('by-status', 'testStatus');
         }
 
-        // Test History Store (added in DB version 3).
+        // Test History Store (v2)
         if (!db.objectStoreNames.contains('test_history')) {
-          const testHistoryStore = db.createObjectStore('test_history', { keyPath: 'id' });
-          testHistoryStore.createIndex('by-timestamp', 'timestamp');
+          const testStore = db.createObjectStore('test_history', { keyPath: 'id' });
+          testStore.createIndex('by-model', 'modelId');
+          testStore.createIndex('by-status', 'result');
+          testStore.createIndex('by-timestamp', 'timestamp');
         }
 
-        // Task Specializations Store (added in DB version 3).
+        // Task Specializations Store (v2)
         if (!db.objectStoreNames.contains('specializations')) {
           db.createObjectStore('specializations', { keyPath: 'task' });
         }

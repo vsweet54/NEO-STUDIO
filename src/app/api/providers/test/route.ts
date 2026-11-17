@@ -6,13 +6,11 @@ import { GroqAdapter } from '@/lib/providers/groq';
 import { OllamaAdapter } from '@/lib/providers/ollama';
 import { OpenRouterAdapter } from '@/lib/providers/openrouter';
 import { KeyPool } from '@/lib/providers/key-pool';
-import { validateProviderBaseUrl } from '@/lib/security/provider-url';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { providerId, apiKey, baseUrl, accountId } = body;
-    const safeBaseUrl = validateProviderBaseUrl(providerId, baseUrl);
 
     let result;
 
@@ -34,7 +32,7 @@ export async function POST(req: NextRequest) {
         if (keys.length === 0) {
           return NextResponse.json({ success: false, message: 'OpenRouter API key is missing' }, { status: 400 });
         }
-        const endpoint = safeBaseUrl || process.env.OPENROUTER_BASE_URL;
+        const endpoint = baseUrl || process.env.OPENROUTER_BASE_URL;
         result = await OpenRouterAdapter.testConnection(keys[0], endpoint);
         if (result.success && keys.length > 1) {
           result.message += ` [Multi-Key Active: ${keys.length} API Keys terdeteksi dengan auto-rotation]`;
@@ -47,7 +45,7 @@ export async function POST(req: NextRequest) {
         if (keys.length === 0) {
           return NextResponse.json({ success: false, message: 'NVIDIA API key is missing' }, { status: 400 });
         }
-        const endpoint = safeBaseUrl || process.env.NVIDIA_BASE_URL;
+        const endpoint = baseUrl || process.env.NVIDIA_BASE_URL;
         result = await NvidiaAdapter.testConnection(keys[0], endpoint);
         if (result.success && keys.length > 1) {
           result.message += ` [Multi-Key Active: ${keys.length} API Keys terdeteksi dengan auto-rotation]`;
@@ -75,7 +73,7 @@ export async function POST(req: NextRequest) {
         if (keys.length === 0) {
           return NextResponse.json({ success: false, message: 'Groq API key is missing' }, { status: 400 });
         }
-        const endpoint = safeBaseUrl || process.env.GROQ_BASE_URL;
+        const endpoint = baseUrl || process.env.GROQ_BASE_URL;
         result = await GroqAdapter.testConnection(keys[0], endpoint);
         if (result.success && keys.length > 1) {
           result.message += ` [Multi-Key Active: ${keys.length} API Keys terdeteksi dengan auto-rotation]`;
@@ -85,7 +83,7 @@ export async function POST(req: NextRequest) {
 
       case 'ollama': {
         const keys = KeyPool.getKeys(apiKey, ['OLLAMA_API_KEY', 'OLLAMA_API_KEYS']);
-        const endpoint = safeBaseUrl || process.env.OLLAMA_BASE_URL || 'https://ollama.com';
+        const endpoint = baseUrl || process.env.OLLAMA_BASE_URL;
         result = await OllamaAdapter.testConnection(endpoint, keys.length > 0 ? keys[0] : undefined);
         if (result.success && keys.length > 1) {
           result.message += ` [Multi-Key Active: ${keys.length} API Keys terdeteksi]`;
