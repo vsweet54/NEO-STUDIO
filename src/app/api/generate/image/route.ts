@@ -25,9 +25,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Prompt is required' }, { status: 400 });
     }
 
+    // Sanitize prompt for diffusion models (FLUX.1 Schnell, SDXL, Imagen):
+    // Strip out robot meta-instructions, contracts, and grid-lock boilerplate that confuse diffusion models
+    const cleanedPrompt = prompt
+      .replace(/STORYBOARD\s+GRID\s+LOCK\s*-\s*MANDATORY\.?/gi, '')
+      .replace(/Violating any rule below\s*=\s*grid failure\.?/gi, '')
+      .replace(/LAYOUT\s*-\s*render EXACTLY\s*\d+\s*panels[^\n.]*[.\n]?/gi, '')
+      .replace(/PANEL NUMBER MAP[^\n:]*:\s*/gi, '')
+      .replace(/\[VIDEO FRAME ZERO CONTRACT[^\]]*\]/gi, '')
+      .replace(/GOOGLE FLOW \/ VEO 2[^\n.]*[.\n]?/gi, '')
+      .replace(/FIRST FRAME STATE:\s*/gi, '')
+      .replace(/MOTION DYNAMICS:\s*/gi, '')
+      .replace(/NEGATIVE CONSTRAINTS:\s*/gi, '')
+      .replace(/binding, follow exactly:?\s*/gi, '')
+      .replace(/\[Character\]/gi, 'a focused cinematic character')
+      .replace(/\[Shot \d+\]/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/^[,;.\s]+/, '')
+      .replace(/[,;.\s]+$/, '')
+      .trim();
+
     const options = {
       model,
-      prompt,
+      prompt: cleanedPrompt || prompt,
       negativePrompt,
       aspectRatio: aspectRatio || '16:9',
       width,

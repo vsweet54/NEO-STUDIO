@@ -91,8 +91,8 @@ STRICT JSON OUTPUT FORMAT REQUIREMENTS:
           "text": "Actual dialogue line in ${params.language}"
         }
       ],
-      "imagePrompt": "STORYBOARD GRID LOCK - MANDATORY. Violating any rule below = grid failure. LAYOUT - render EXACTLY 3 or 5 panels showing sequential shots. P1: [Shot 1], P2: [Shot 2], P3: [Shot 3]. STYLE: ${params.visualStyle}, cinematic lighting, photorealistic 8k, aspect ratio ${params.aspectRatio}.",
-      "videoPrompt": "[VIDEO FRAME ZERO CONTRACT - ABSOLUTE, NON-NEGOTIABLE] Compliant video generation prompt specifying initial frame, camera push/pan, temporal motion, lighting, and 24fps motion blur.",
+      "imagePrompt": "A highly detailed cinematic scene illustration showing the actual characters with their specific physical appearance, distinctive clothing, exact poses and environment setting, ${params.visualStyle}, cinematic lighting, shot on 35mm lens, photorealistic 8k, aspect ratio ${params.aspectRatio}. (Written in descriptive visual English, NO meta-rules, NO placeholder brackets)",
+      "videoPrompt": "[VIDEO MOTION CONTRACT] Initial frame locked with scene visual anchor, smooth camera motion, cinematic 24fps motion blur, realistic character kinetics, lighting, and temporal continuity.",
       "cameraAngle": "e.g. Eye level, low angle, extreme close-up",
       "cameraMovement": "e.g. Slow push-in dolly, tracking shot, pan right",
       "lighting": "e.g. Golden hour volumetric rim light, neon moody noir",
@@ -113,7 +113,7 @@ STRICT JSON OUTPUT FORMAT REQUIREMENTS:
           "cameraAngle": "Medium Close-up, eye-level",
           "cameraMovement": "Slow push-in dolly",
           "dialogue": "[focused] RIRIN: 'Apakah ini tempatnya?'",
-          "imagePrompt": "Cinematic 35mm film shot of [Character], walking towards the wooden door, hand touching door handle, focused expression, ${params.visualStyle}, cinematic dramatic lighting, photorealistic 8k, aspect ratio ${params.aspectRatio}",
+          "imagePrompt": "Cinematic 35mm film shot of the character (with exact physical features and clothes), performing this specific action, detailed facial expression, ${params.visualStyle}, cinematic dramatic lighting, photorealistic 8k, aspect ratio ${params.aspectRatio}",
           "videoPrompt": "[VIDEO MOTION] Character steps forward towards camera, hand reaches out to touch door handle, camera slowly pushes in 24fps motion blur, cinematic lighting",
           "transition": "Direct cut to Shot 2"
         }
