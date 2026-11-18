@@ -39,6 +39,13 @@ PROJECT SPECIFICATIONS:
 - Target Duration per Scene: ${params.sceneDuration} seconds
 - Aspect Ratio: ${params.aspectRatio}
 
+CRITICAL MANDATORY RULES FOR IMAGE PROMPTS (DIFFUSION ACCURACY):
+1. "imagePrompt" and "videoPrompt" MUST ALWAYS BE WRITTEN IN PURE ENGLISH, even if the story/dialogue is in ${params.language}! Diffusion models (FLUX.1 Schnell, SDXL) only understand English.
+2. ACCURATE SCENE MATCHING: The imagePrompt MUST explicitly depict the exact action, objects, and environment described in that scene or shot.
+3. CHARACTER PHYSICAL TRAITS: Never just write the character name. Always describe their specific physical appearance (e.g. "a 22-year-old Indonesian woman with long black ponytail, wearing a pastel yellow hoodie").
+4. CULTURAL TRANSLATION: Translate Indonesian props into rich descriptive English (e.g. "gerobak cilok" -> "traditional Indonesian street food wooden cart with steaming metal pots and sauce bottles on roadside curb").
+5. SINGLE SHOT FOCUS: Each shot imagePrompt must describe one clear photographic frame without multi-panel splits.
+
 STRICT JSON OUTPUT FORMAT REQUIREMENTS:
 {
   "title": "Compelling Project Title",

@@ -45,9 +45,74 @@ export async function POST(req: NextRequest) {
       .replace(/[,;.\s]+$/, '')
       .trim();
 
+    // Translate & Enrich prompt to English visual description for diffusion models (FLUX.1 Schnell / SDXL):
+    // Diffusion models ONLY understand English. Non-English or Indonesian prompts produce random, off-topic images.
+    let finalPrompt = cleanedPrompt || prompt;
+
+    const indonesianPattern = /\b(adegan|karakter|sedang|berjalan|melihat|membuka|menutup|memegang|duduk|berdiri|tersenyum|tertawa|menangis|marah|takut|kaget|ekspresi|wajah|pintu|meja|kursi|ruangan|gerobak|jalan|pinggir|malam|siang|sore|pagi|lampu|baju|celana|rambut|dengan|di dalam|di luar|pada|saat|menuju|mengambil|meminum|makan|tangan|mata|bicara|warung|makanan|pedagang|cilok|bakso|kopi|minum|masuk|keluar|toko|sekolah|kantor|rumah)\b/i;
+
+    if (indonesianPattern.test(finalPrompt)) {
+      try {
+        const textKeys = KeyPool.getKeys(apiKey, ['GEMINI_API_KEY', 'GEMINI_API_KEYS']);
+        if (textKeys.length > 0) {
+          const transRes = await GeminiAdapter.generateText(textKeys[0], {
+            model: 'gemini-2.0-flash',
+            prompt: `You are an expert cinematic storyboard prompt engineer for FLUX.1.
+Translate this Indonesian storyboard scene description into an extremely accurate, photorealistic 8K cinematic image prompt in ENGLISH.
+Must clearly describe:
+- The character's physical traits, pose, and emotion
+- The exact action occurring
+- The specific props, setting, and environment
+- Cinematic lighting and camera framing
+Output ONLY the final English prompt. No commentary.
+
+Scene: "${finalPrompt}"`,
+            maxTokens: 250,
+            temperature: 0.3,
+          });
+
+          if (transRes.success && transRes.data?.text) {
+            const enriched = transRes.data.text.trim().replace(/^["']|["']$/g, '');
+            if (enriched.length > 15) {
+              finalPrompt = enriched;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Image Route] AI prompt translation skipped:', err);
+      }
+
+      // Fallback dictionary translation if AI call wasn't available
+      if (indonesianPattern.test(finalPrompt)) {
+        finalPrompt = finalPrompt
+          .replace(/\b(adegan|shot)\s*\d*:?\s*/gi, '')
+          .replace(/\bkarakter\b/gi, 'character')
+          .replace(/\bsedang berjalan menuju\b/gi, 'walking towards')
+          .replace(/\bsedang berjalan\b/gi, 'walking')
+          .replace(/\bberjalan\b/gi, 'walking')
+          .replace(/\bmelihat ke arah\b/gi, 'looking towards')
+          .replace(/\bmelihat\b/gi, 'looking at')
+          .replace(/\bmembuka pintu\b/gi, 'opening the door')
+          .replace(/\bmelangkah masuk\b/gi, 'stepping inside')
+          .replace(/\btersenyum\b/gi, 'smiling warmly')
+          .replace(/\bekspresi senang\b/gi, 'cheerful expression')
+          .replace(/\bekspresi fokus\b/gi, 'focused expression')
+          .replace(/\bdi pinggir jalan\b/gi, 'on an Asian roadside street')
+          .replace(/\bgerobak dorong\b/gi, 'traditional street food cart')
+          .replace(/\bgerobak cilok\b/gi, 'traditional Indonesian street food cart with steaming pots')
+          .replace(/\bpedagang cilok\b/gi, 'Indonesian street food vendor at a cart')
+          .replace(/\bwarung\b/gi, 'traditional street-side food stall')
+          .replace(/\bpencahayaan sore\b/gi, 'golden hour sunset lighting')
+          .replace(/\bmalam hari\b/gi, 'night scene with moody ambient lighting')
+          .replace(/\bsiang hari\b/gi, 'bright daylight')
+          .replace(/\bdi dalam ruangan\b/gi, 'indoor room interior');
+        finalPrompt = `Cinematic 35mm film photograph, ${finalPrompt}, cinematic lighting, photorealistic 8k, highly detailed, masterwork composition`;
+      }
+    }
+
     const options = {
       model,
-      prompt: cleanedPrompt || prompt,
+      prompt: finalPrompt,
       negativePrompt,
       aspectRatio: aspectRatio || '16:9',
       width,

@@ -266,7 +266,9 @@ export const StoryboardWizardModal: React.FC<StoryboardWizardModalProps> = ({
                     cameraAngle: sIdx === 0 ? 'Establishing / Wide' : sIdx === 1 ? 'Medium Close-Up' : 'Close-Up Reaction',
                     cameraMovement: sIdx === 0 ? 'Slow Push-in' : 'Tracking Shot',
                     dialogue: (sc.dialogue && sc.dialogue[sIdx]?.text) ? `[${sc.dialogue[sIdx].emotionTag || 'bicara'}] ${sc.dialogue[sIdx].characterName}: "${sc.dialogue[sIdx].text}"` : '',
-                    imagePrompt: `Cinematic 35mm film shot ${sIdx + 1} of ${sc.title}, ${sc.description}, ${visualStyle}, ${sc.lighting || 'cinematic lighting'}, photorealistic 8k, aspect ratio ${aspectRatio}`,
+                    imagePrompt: sc.imagePrompt
+                      ? `${sc.imagePrompt}, shot ${sIdx + 1} specific perspective, cinematic framing, 8k resolution`
+                      : `Cinematic 35mm film shot of ${sc.title}, ${visualStyle}, cinematic lighting, photorealistic 8k, aspect ratio ${aspectRatio}`,
                     videoPrompt: `[VIDEO MOTION] Shot ${sIdx + 1} continuity: Camera moves smoothly, character performs action naturally, 24fps film motion blur`,
                     transition: sIdx === targetShotsCount - 1 ? sc.transition || 'Cut' : 'Direct Cut',
                     status: 'idle',
