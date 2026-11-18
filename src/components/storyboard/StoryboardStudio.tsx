@@ -22,6 +22,8 @@ import {
   Move,
   Layers,
   AlertCircle,
+  Lock,
+  UserCheck,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -36,6 +38,7 @@ import { getCharactersByProject } from '@/lib/db/characters';
 import { getMediaBlobUrl } from '@/lib/db/media';
 import { downloadMediaBlobFile } from '@/lib/storage/export-import';
 import { queueManager } from '@/lib/queue/generation-queue';
+import { enrichPromptWithCharacterDNA } from '@/lib/prompts/character-anchor';
 
 interface StoryboardStudioProps {
   projectId: string;
@@ -236,12 +239,15 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
 
     setGeneratingShotIds((prev) => ({ ...prev, [shot.id]: true }));
 
+    const rawPrompt = shot.imagePrompt || activeScene.imagePrompt;
+    const finalPrompt = enrichPromptWithCharacterDNA(rawPrompt, activeScene, characters);
+
     try {
       await queueManager.addJob({
         projectId: activeScene.projectId,
         sceneId: activeScene.id,
         taskType: 'image',
-        prompt: shot.imagePrompt || activeScene.imagePrompt,
+        prompt: finalPrompt,
         params: {
           aspectRatio: activeScene.aspectRatio || '16:9',
         },
@@ -310,12 +316,14 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
   const handleGenerateImage = async () => {
     if (!activeScene || !imagePrompt) return;
 
+    const finalPrompt = enrichPromptWithCharacterDNA(imagePrompt, activeScene, characters);
+
     try {
       await queueManager.addJob({
         projectId: activeScene.projectId,
         sceneId: activeScene.id,
         taskType: 'image',
-        prompt: imagePrompt,
+        prompt: finalPrompt,
         params: {
           aspectRatio: activeScene.aspectRatio || '16:9',
         },
@@ -726,6 +734,46 @@ Format output JSON array:
             </Button>
           </div>
         </div>
+
+        {/* CHARACTER CONSISTENCY LOCK BANNER */}
+        {characters.length > 0 && (
+          <div className="bg-[#121426] border border-accent-purple/40 rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-inner">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-accent-purple/20 border border-purple-500/40 flex items-center justify-center text-accent-purple shrink-0 shadow-sm shadow-purple-950/40">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gray-100">Kunci Konsistensi Karakter (Active Lock)</span>
+                  <Badge variant="purple" size="sm" className="text-[10px] font-mono">
+                    DNA Locked
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Ciri fisik wajah, warna kulit, model rambut, dan busana signature karakter otomatis dikunci ke seluruh shot.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {characters.map((c) => (
+                <div
+                  key={c.id}
+                  className="px-2.5 py-1 rounded-lg bg-secondary/80 border border-border flex items-center gap-1.5 text-[11px] font-mono text-gray-200"
+                  title={`${c.name}: ${c.physicalAppearance || ''} | Pakaian: ${c.clothing || ''}`}
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-accent-cyan" />
+                  <span className="font-bold text-white">{c.name}</span>
+                  {c.clothing && (
+                    <span className="text-[10px] text-purple-300 max-w-[130px] truncate">
+                      ({c.clothing})
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Responsive Multi-Shot Grid (2 to 4 columns matching professional storyboard boards) */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

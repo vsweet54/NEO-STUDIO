@@ -42,7 +42,10 @@ PROJECT SPECIFICATIONS:
 CRITICAL MANDATORY RULES FOR IMAGE PROMPTS (DIFFUSION ACCURACY):
 1. "imagePrompt" and "videoPrompt" MUST ALWAYS BE WRITTEN IN PURE ENGLISH, even if the story/dialogue is in ${params.language}! Diffusion models (FLUX.1 Schnell, SDXL) only understand English.
 2. ACCURATE SCENE MATCHING: The imagePrompt MUST explicitly depict the exact action, objects, and environment described in that scene or shot.
-3. CHARACTER PHYSICAL TRAITS: Never just write the character name. Always describe their specific physical appearance (e.g. "a 22-year-old Indonesian woman with long black ponytail, wearing a pastel yellow hoodie").
+3. CHARACTER VISUAL CONSISTENCY LOCK:
+   - For every character, define an explicit visual DNA: exact age, ethnicity, skin tone, facial traits, hairstyle, and SIGNATURE CLOTHING (e.g. "a 22-year-old Indonesian woman, warm tan skin, round almond eyes, long black hair in loose ponytail, wearing an oversized mustard-yellow zip-up hoodie over white t-shirt and dark blue jeans").
+   - IN EVERY SINGLE SHOT AND SCENE where that character appears, you MUST REPEAT THIS EXACT SAME PHYSICAL APPEARANCE AND SIGNATURE CLOTHING DESCRIPTION!
+   - NEVER alter hair color, skin tone, or clothing across shots or scenes. This locks diffusion model cross-attention so the exact same character appears in every single picture.
 4. CULTURAL TRANSLATION: Translate Indonesian props into rich descriptive English (e.g. "gerobak cilok" -> "traditional Indonesian street food wooden cart with steaming metal pots and sauce bottles on roadside curb").
 5. SINGLE SHOT FOCUS: Each shot imagePrompt must describe one clear photographic frame without multi-panel splits.
 
