@@ -10,7 +10,11 @@ import {
   Download,
   Image as ImageIcon,
   Check,
+  Star,
+  UploadCloud,
+  Eye,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -18,7 +22,7 @@ import { Input, Textarea, Select } from '../ui/Input';
 import { Modal } from '../ui/Modal';
 import { Character } from '@/types/character';
 import { getCharactersByProject, saveCharacter, deleteCharacter } from '@/lib/db/characters';
-import { getMediaBlobUrl, saveMediaBlob } from '@/lib/db/media';
+import { getMediaBlobUrl, saveMediaBlob, deleteMediaBlob } from '@/lib/db/media';
 import { downloadMediaBlobFile } from '@/lib/storage/export-import';
 import { queueManager } from '@/lib/queue/generation-queue';
 import { PromptEngine } from '@/lib/prompts/templates';
@@ -32,9 +36,15 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
   const [selectedChar, setSelectedChar] = useState<Character | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGeneratingSheet, setIsGeneratingSheet] = useState(false);
-  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
-  // Form states
+  // Blob URL Maps
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+  const [sheetUrls, setSheetUrls] = useState<Record<string, string>>({});
+  const [refImageUrls, setRefImageUrls] = useState<Record<string, string>>({});
+
+  // Form states for modal
   const [name, setName] = useState('');
   const [role, setRole] = useState<'protagonist' | 'antagonist' | 'supporting' | 'narrator'>('protagonist');
   const [age, setAge] = useState('24');
@@ -44,29 +54,51 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
   const [clothing, setClothing] = useState('');
   const [personality, setPersonality] = useState('');
   const [token, setToken] = useState('');
+  const [modalAvatarBlobId, setModalAvatarBlobId] = useState<string | undefined>(undefined);
+  const [modalAvatarUrl, setModalAvatarUrl] = useState<string | null>(null);
 
   const refImageInputRef = useRef<HTMLInputElement>(null);
+  const avatarImageInputRef = useRef<HTMLInputElement>(null);
+  const modalAvatarInputRef = useRef<HTMLInputElement>(null);
 
   const loadCharacters = async () => {
     if (!projectId) return;
     try {
       const list = await getCharactersByProject(projectId);
       setCharacters(list);
-      if (list.length > 0 && !selectedChar) {
-        setSelectedChar(list[0]);
-      }
 
-      // Load avatar urls
-      const urls: Record<string, string> = {};
+      const currentChar = selectedChar
+        ? list.find((c) => c.id === selectedChar.id) || list[0] || null
+        : list[0] || null;
+      setSelectedChar(currentChar);
+
+      // Load avatar and sheet URLs
+      const aUrls: Record<string, string> = {};
+      const sUrls: Record<string, string> = {};
+      const rUrls: Record<string, string> = {};
+
       for (const ch of list) {
         if (ch.avatarBlobId) {
           const url = await getMediaBlobUrl(ch.avatarBlobId);
-          if (url) urls[ch.id] = url;
+          if (url) aUrls[ch.id] = url;
+        }
+        if (ch.characterSheetBlobId) {
+          const url = await getMediaBlobUrl(ch.characterSheetBlobId);
+          if (url) sUrls[ch.id] = url;
+        }
+        if (ch.referenceImageBlobIds && ch.referenceImageBlobIds.length > 0) {
+          for (const bId of ch.referenceImageBlobIds) {
+            const url = await getMediaBlobUrl(bId);
+            if (url) rUrls[bId] = url;
+          }
         }
       }
-      setAvatarUrls(urls);
+
+      setAvatarUrls(aUrls);
+      setSheetUrls(sUrls);
+      setRefImageUrls(rUrls);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading characters:', err);
     }
   };
 
@@ -84,6 +116,9 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
     setClothing('');
     setPersonality('');
     setToken(`[CHAR_${Date.now()}]`);
+    setModalAvatarBlobId(undefined);
+    setModalAvatarUrl(null);
+    setSelectedChar(null);
     setIsModalOpen(true);
   };
 
@@ -97,8 +132,26 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
     setClothing(char.clothing);
     setPersonality(char.personality);
     setToken(char.consistencyPromptToken);
+    setModalAvatarBlobId(char.avatarBlobId);
+    setModalAvatarUrl(avatarUrls[char.id] || null);
     setSelectedChar(char);
     setIsModalOpen(true);
+  };
+
+  const handleModalAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const blobId = await saveMediaBlob(file, 'image', file.name, projectId);
+      const url = await getMediaBlobUrl(blobId);
+      setModalAvatarBlobId(blobId);
+      setModalAvatarUrl(url);
+    } catch (err: any) {
+      alert(`Gagal upload avatar: ${err.message}`);
+    } finally {
+      if (modalAvatarInputRef.current) modalAvatarInputRef.current.value = '';
+    }
   };
 
   const handleSaveCharacter = async () => {
@@ -134,8 +187,10 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
         speed: 1,
         timbreDescription: 'Natural tone',
       },
-      referenceImageBlobIds: selectedChar?.referenceImageBlobIds || [],
-      avatarBlobId: selectedChar?.avatarBlobId,
+      referenceImageBlobIds: modalAvatarBlobId
+        ? Array.from(new Set([...(selectedChar?.referenceImageBlobIds || []), modalAvatarBlobId]))
+        : selectedChar?.referenceImageBlobIds || [],
+      avatarBlobId: modalAvatarBlobId || selectedChar?.avatarBlobId,
       characterSheetBlobId: selectedChar?.characterSheetBlobId,
       consistencyPromptToken: token || `[CHAR_${name.toUpperCase().replace(/\s+/g, '_')}]`,
       createdAt: selectedChar?.createdAt || now,
@@ -146,10 +201,12 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
     setIsModalOpen(false);
     await loadCharacters();
     setSelectedChar(charRecord);
+    setUploadNotice(`Karakter ${name} berhasil disimpan!`);
+    setTimeout(() => setUploadNotice(null), 3000);
   };
 
   const handleGeneratePortrait = async (char: Character) => {
-    const prompt = `Character portrait concept art: ${char.name}, ${char.ageAppearance} years old, ${char.physicalAppearance}, face: ${char.faceDescription}, hair: ${char.hairStyle}, attire: ${char.clothing}. Cinematic studio lighting, sharp 8k resolution, photorealistic character key visual.`;
+    const prompt = `Cinematic 35mm film character portrait concept: ${char.name}, ${char.ageAppearance} years old, ${char.physicalAppearance}, facial features: ${char.faceDescription}, hairstyle: ${char.hairStyle}, wearing signature outfit: ${char.clothing}. Soft studio catchlights in eyes, cinematic key lighting, sharp 8k resolution, photorealistic character key visual.`;
 
     try {
       await queueManager.addJob({
@@ -160,7 +217,13 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
         params: { aspectRatio: '1:1' },
         onComplete: async (job) => {
           if (job.resultBlobId) {
-            const updated = { ...char, avatarBlobId: job.resultBlobId };
+            const updated = {
+              ...char,
+              avatarBlobId: job.resultBlobId,
+              referenceImageBlobIds: Array.from(
+                new Set([...(char.referenceImageBlobIds || []), job.resultBlobId])
+              ),
+            };
             await saveCharacter(updated);
             await loadCharacters();
             setSelectedChar(updated);
@@ -189,7 +252,13 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
         params: { aspectRatio: '16:9' },
         onComplete: async (job) => {
           if (job.resultBlobId) {
-            const updated = { ...char, characterSheetBlobId: job.resultBlobId };
+            const updated = {
+              ...char,
+              characterSheetBlobId: job.resultBlobId,
+              referenceImageBlobIds: Array.from(
+                new Set([...(char.referenceImageBlobIds || []), job.resultBlobId])
+              ),
+            };
             await saveCharacter(updated);
             await loadCharacters();
             setSelectedChar(updated);
@@ -204,22 +273,84 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
     }
   };
 
+  // Upload Reference Photo for Character
   const handleReferenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedChar) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !selectedChar) return;
 
+    setIsUploading(true);
     try {
-      const blobId = await saveMediaBlob(file, 'image', file.name, projectId);
-      const updated = {
+      const newBlobIds: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const blobId = await saveMediaBlob(file, 'image', file.name, projectId);
+        newBlobIds.push(blobId);
+      }
+
+      const existingIds = selectedChar.referenceImageBlobIds || [];
+      const updatedIds = Array.from(new Set([...existingIds, ...newBlobIds]));
+
+      const updated: Character = {
         ...selectedChar,
-        referenceImageBlobIds: [...(selectedChar.referenceImageBlobIds || []), blobId],
-        avatarBlobId: selectedChar.avatarBlobId || blobId,
+        referenceImageBlobIds: updatedIds,
+        avatarBlobId: selectedChar.avatarBlobId || newBlobIds[0],
+        updatedAt: Date.now(),
+      };
+
+      await saveCharacter(updated);
+      await loadCharacters();
+      setSelectedChar(updated);
+
+      setUploadNotice(`${newBlobIds.length} foto referensi berhasil diunggah!`);
+      setTimeout(() => setUploadNotice(null), 3000);
+    } catch (err: any) {
+      alert(`Gagal upload referensi: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+      if (refImageInputRef.current) refImageInputRef.current.value = '';
+      if (avatarImageInputRef.current) avatarImageInputRef.current.value = '';
+    }
+  };
+
+  const handleSetAsAvatar = async (blobId: string) => {
+    if (!selectedChar) return;
+    try {
+      const updated: Character = {
+        ...selectedChar,
+        avatarBlobId: blobId,
+        updatedAt: Date.now(),
       };
       await saveCharacter(updated);
       await loadCharacters();
       setSelectedChar(updated);
+      setUploadNotice(`Foto berhasil dijadikan Avatar Utama ${selectedChar.name}!`);
+      setTimeout(() => setUploadNotice(null), 3000);
     } catch (err: any) {
-      alert(`Gagal upload referensi: ${err.message}`);
+      alert(`Gagal mengatur avatar: ${err.message}`);
+    }
+  };
+
+  const handleDeleteReferencePhoto = async (blobId: string) => {
+    if (!selectedChar) return;
+    if (!confirm('Hapus foto referensi ini?')) return;
+
+    try {
+      const updatedIds = (selectedChar.referenceImageBlobIds || []).filter((id) => id !== blobId);
+      const newAvatarId = selectedChar.avatarBlobId === blobId ? updatedIds[0] || undefined : selectedChar.avatarBlobId;
+
+      const updated: Character = {
+        ...selectedChar,
+        referenceImageBlobIds: updatedIds,
+        avatarBlobId: newAvatarId,
+        updatedAt: Date.now(),
+      };
+
+      await saveCharacter(updated);
+      await deleteMediaBlob(blobId);
+      await loadCharacters();
+      setSelectedChar(updated);
+    } catch (err: any) {
+      alert(`Gagal menghapus foto: ${err.message}`);
     }
   };
 
@@ -231,7 +362,7 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-16">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
@@ -240,7 +371,7 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
             Character Consistency Studio
           </h1>
           <p className="text-xs text-gray-400 mt-1">
-            Kunci identitas visual, gaya rambut, busana, dan tokens konsistensi karakter antar adegan.
+            Kunci identitas visual, upload foto referensi, dan jaga wajah serta busana karakter 100% konsisten antar adegan.
           </p>
         </div>
 
@@ -248,6 +379,13 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
           <Plus className="w-4 h-4" /> Karakter Baru
         </Button>
       </div>
+
+      {uploadNotice && (
+        <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-xl text-xs font-medium animate-in fade-in flex items-center justify-between">
+          <span>{uploadNotice}</span>
+          <Check className="w-4 h-4 text-emerald-400" />
+        </div>
+      )}
 
       {characters.length === 0 ? (
         <div className="p-12 border border-dashed border-border rounded-xl text-center space-y-4 bg-[#0C0E1B]">
@@ -297,7 +435,9 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
                           {char.role}
                         </Badge>
                       </div>
-                      <p className="text-xs text-gray-400 truncate mt-0.5">{char.ageAppearance} th • {char.personality || 'Neutral'}</p>
+                      <p className="text-xs text-gray-400 truncate mt-0.5">
+                        {char.ageAppearance} th • {char.personality || 'Neutral'}
+                      </p>
                     </div>
                   </div>
                 );
@@ -309,20 +449,40 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
           <div className="lg:col-span-8">
             {selectedChar && (
               <div className="bg-surface border border-border rounded-2xl p-6 space-y-6 shadow-2xl">
-                {/* Header Profile */}
+                {/* Header Profile with Interactive Avatar */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-border">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-[#0D0E1A] border border-border overflow-hidden shrink-0 flex items-center justify-center">
+                    {/* Clickable Avatar Photo */}
+                    <div
+                      onClick={() => avatarImageInputRef.current?.click()}
+                      className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-[#0D0E1A] border-2 border-accent-purple/50 overflow-hidden shrink-0 flex items-center justify-center group cursor-pointer shadow-lg shadow-purple-950/50"
+                      title="Klik untuk upload avatar baru"
+                    >
                       {avatarUrls[selectedChar.id] ? (
                         <img
                           src={avatarUrls[selectedChar.id]}
                           alt={selectedChar.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
                         />
                       ) : (
-                        <Users className="w-8 h-8 text-gray-500" />
+                        <Users className="w-10 h-10 text-gray-500" />
                       )}
+                      {/* Hover Overlay */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-1">
+                        <Camera className="w-5 h-5 text-accent-cyan" />
+                        <span className="text-[9px] font-semibold mt-1">Ubah Foto</span>
+                      </div>
                     </div>
+
+                    {/* Hidden Avatar Input */}
+                    <input
+                      type="file"
+                      ref={avatarImageInputRef}
+                      onChange={handleReferenceUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
+
                     <div>
                       <div className="flex items-center gap-2">
                         <h2 className="text-xl font-extrabold text-white">{selectedChar.name}</h2>
@@ -331,12 +491,15 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
                         </Badge>
                       </div>
                       <p className="text-xs text-gray-400 mt-1 font-mono">
-                        Consistency Token: <span className="text-accent-cyan">{selectedChar.consistencyPromptToken}</span>
+                        Consistency Token: <span className="text-accent-cyan font-bold">{selectedChar.consistencyPromptToken}</span>
+                      </p>
+                      <p className="text-[11px] text-emerald-400 mt-0.5 flex items-center gap-1 font-mono">
+                        <Check className="w-3 h-3" /> Visual DNA otomatis dikunci pada Storyboard
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
@@ -379,7 +542,7 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
 
                   <div className="p-3.5 bg-[#0D0E1A] border border-border rounded-xl space-y-1">
                     <span className="font-semibold text-gray-400 uppercase tracking-wider text-[10px]">
-                      Pakaian & Aksesoris
+                      Pakaian & Signature Outfit
                     </span>
                     <p className="text-gray-200">{selectedChar.clothing || 'Belum diatur'}</p>
                   </div>
@@ -398,7 +561,7 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
                     <div>
                       <h4 className="text-sm font-bold text-gray-200">Multi-Angle Model Sheet</h4>
                       <p className="text-xs text-gray-400">
-                        Render 3 sudut (Depan, 3/4 View, Samping) untuk menjaga referensi wajah.
+                        Render 3 sudut (Depan, 3/4 View, Samping) untuk menjaga referensi wajah di seluruh cerita.
                       </p>
                     </div>
                     <Button
@@ -412,10 +575,10 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
                     </Button>
                   </div>
 
-                  {selectedChar.characterSheetBlobId ? (
+                  {selectedChar.characterSheetBlobId && sheetUrls[selectedChar.id] ? (
                     <div className="relative rounded-xl overflow-hidden border border-border group bg-black">
                       <img
-                        src={avatarUrls[selectedChar.id] || ''}
+                        src={sheetUrls[selectedChar.id]}
                         alt="Character Sheet"
                         className="w-full h-auto max-h-72 object-cover"
                       />
@@ -428,28 +591,122 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
                   )}
                 </div>
 
-                {/* Reference Images Upload */}
-                <div className="space-y-3 pt-2 border-t border-border">
+                {/* REFERENCE IMAGES GALLERY SECTION */}
+                <div className="space-y-4 pt-4 border-t border-border">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300">
-                      Foto Referensi Karakter ({selectedChar.referenceImageBlobIds?.length || 0})
-                    </h4>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-200 flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-accent-purple" />
+                        Foto Referensi Karakter ({selectedChar.referenceImageBlobIds?.length || 0})
+                      </h4>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        Upload foto wajah atau busana asli untuk menjaga kemiripan karakter di setiap adegan.
+                      </p>
+                    </div>
+
                     <input
                       type="file"
                       ref={refImageInputRef}
                       onChange={handleReferenceUpload}
                       accept="image/*"
+                      multiple
                       className="hidden"
                     />
+
                     <Button
-                      variant="outline"
+                      variant="primary"
                       size="sm"
                       onClick={() => refImageInputRef.current?.click()}
+                      disabled={isUploading}
                       className="text-xs"
                     >
-                      <ImageIcon className="w-3.5 h-3.5" /> Upload Referensi
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      {isUploading ? 'Mengunggah...' : 'Upload Foto Referensi'}
                     </Button>
                   </div>
+
+                  {/* Upload Drop Zone / Display Grid */}
+                  {selectedChar.referenceImageBlobIds && selectedChar.referenceImageBlobIds.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {selectedChar.referenceImageBlobIds.map((blobId, idx) => {
+                        const imgUrl = refImageUrls[blobId];
+                        const isMainAvatar = selectedChar.avatarBlobId === blobId;
+
+                        return (
+                          <div
+                            key={blobId}
+                            className={`relative aspect-square rounded-xl overflow-hidden border transition-all group bg-black/60 ${
+                              isMainAvatar ? 'border-accent-purple ring-2 ring-accent-purple/40' : 'border-border'
+                            }`}
+                          >
+                            {imgUrl ? (
+                              <img
+                                src={imgUrl}
+                                alt={`Referensi ${selectedChar.name} ${idx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-600">
+                                <Camera className="w-6 h-6 animate-pulse" />
+                              </div>
+                            )}
+
+                            {/* Main Avatar Badge */}
+                            {isMainAvatar && (
+                              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-accent-purple text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
+                                <Star className="w-3 h-3 fill-white" /> Avatar Utama
+                              </div>
+                            )}
+
+                            {/* Hover Actions */}
+                            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                              {!isMainAvatar && (
+                                <button
+                                  onClick={() => handleSetAsAvatar(blobId)}
+                                  className="p-1.5 rounded-lg bg-accent-purple/80 hover:bg-accent-purple text-white text-xs transition-colors"
+                                  title="Jadikan Avatar Utama"
+                                >
+                                  <Star className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                onClick={async () => {
+                                  await downloadMediaBlobFile(
+                                    blobId,
+                                    `referensi_${selectedChar.name.toLowerCase()}_${idx + 1}.png`
+                                  );
+                                }}
+                                className="p-1.5 rounded-lg bg-secondary/80 hover:bg-secondary text-gray-200 transition-colors"
+                                title="Download Foto"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteReferencePhoto(blobId)}
+                                className="p-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 text-red-200 transition-colors"
+                                title="Hapus Foto"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => refImageInputRef.current?.click()}
+                      className="p-8 border-2 border-dashed border-border/80 hover:border-accent-purple/60 rounded-xl text-center bg-[#0D0E1A]/80 cursor-pointer space-y-2 transition-all group"
+                    >
+                      <UploadCloud className="w-8 h-8 mx-auto text-gray-500 group-hover:text-accent-cyan transition-colors" />
+                      <p className="text-xs font-semibold text-gray-300">
+                        Klik di sini untuk upload foto referensi karakter
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Format PNG, JPG, WebP didukung. Foto ini akan mengunci fitur visual karakter.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -465,6 +722,47 @@ export const CharacterStudio: React.FC<CharacterStudioProps> = ({ projectId }) =
         maxWidth="lg"
       >
         <div className="space-y-4">
+          {/* Avatar Upload in Modal */}
+          <div className="flex items-center gap-4 p-3 bg-[#0D0E1A] rounded-xl border border-border">
+            <div
+              onClick={() => modalAvatarInputRef.current?.click()}
+              className="w-16 h-16 rounded-xl bg-secondary border border-border overflow-hidden shrink-0 flex items-center justify-center cursor-pointer group relative"
+              title="Upload foto avatar"
+            >
+              {modalAvatarUrl ? (
+                <img src={modalAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <Users className="w-7 h-7 text-gray-500" />
+              )}
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                <Camera className="w-4 h-4 text-accent-cyan" />
+              </div>
+            </div>
+
+            <input
+              type="file"
+              ref={modalAvatarInputRef}
+              onChange={handleModalAvatarUpload}
+              accept="image/*"
+              className="hidden"
+            />
+
+            <div>
+              <h4 className="text-xs font-bold text-gray-200">Foto Avatar Karakter</h4>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Upload foto profil atau biarkan kosong untuk di-generate AI.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => modalAvatarInputRef.current?.click()}
+                className="h-6 text-[10px] mt-1.5 px-2"
+              >
+                Pilih Foto
+              </Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Nama Karakter" value={name} onChange={(e) => setName(e.target.value)} />
             <Select

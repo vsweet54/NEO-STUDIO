@@ -24,6 +24,9 @@ import {
   AlertCircle,
   Lock,
   UserCheck,
+  ChevronLeft,
+  ChevronRight,
+  PlayCircle,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -32,7 +35,7 @@ import { Modal } from '../ui/Modal';
 import { Project, Episode, Scene, DialogueLine, Shot } from '@/types/project';
 import { Character } from '@/types/character';
 import { getProjectById } from '@/lib/db/projects';
-import { getEpisodesByProject } from '@/lib/db/episodes';
+import { getEpisodesByProject, saveEpisode } from '@/lib/db/episodes';
 import { getScenesByEpisode, saveScene, duplicateScene, deleteScene } from '@/lib/db/scenes';
 import { getCharactersByProject } from '@/lib/db/characters';
 import { getMediaBlobUrl } from '@/lib/db/media';
@@ -82,6 +85,12 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [ttsPlayingLineId, setTtsPlayingLineId] = useState<string | null>(null);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
+  const [isAutoRenderingEpisode, setIsAutoRenderingEpisode] = useState(false);
+  const [autoRenderProgress, setAutoRenderProgress] = useState<{
+    current: number;
+    total: number;
+    currentSceneTitle: string;
+  } | null>(null);
 
   // Load project details and scenes
   useEffect(() => {
@@ -116,6 +125,69 @@ export const StoryboardStudio: React.FC<StoryboardStudioProps> = ({
 
     loadProjectData();
   }, [projectId]);
+
+  const handleSelectEpisode = async (epId: string) => {
+    setSelectedEpisodeId(epId);
+    const scList = await getScenesByEpisode(epId);
+    setScenes(scList);
+    if (scList.length > 0) {
+      setSelectedSceneId(scList[0].id);
+    } else {
+      setSelectedSceneId('');
+      setActiveScene(null);
+    }
+  };
+
+  const handleAddNewEpisode = async () => {
+    if (!project) return;
+    const newEpNum = episodes.length + 1;
+    const epId = 'ep_' + Math.random().toString(36).substring(2, 9) + Date.now();
+    const newEp: Episode = {
+      id: epId,
+      projectId: project.id,
+      episodeNumber: newEpNum,
+      title: `Episode ${newEpNum}`,
+      synopsis: `Sinopsis Episode ${newEpNum}`,
+      status: 'draft',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await saveEpisode(newEp);
+    const updatedEps = await getEpisodesByProject(project.id);
+    setEpisodes(updatedEps);
+
+    // Create initial scene for new episode
+    const newScene: Scene = {
+      id: 'sc_' + Math.random().toString(36).substring(2, 9) + Date.now(),
+      projectId: project.id,
+      episodeId: epId,
+      sceneNumber: 1,
+      title: 'Adegan Pembuka',
+      description: `Adegan pembuka episode ${newEpNum}`,
+      characterIds: characters.map((c) => c.id).slice(0, 2),
+      dialogue: [],
+      imagePrompt: `Cinematic 35mm film opening scene for Episode ${newEpNum}, photorealistic 8k`,
+      videoPrompt: '[VIDEO MOTION] Smooth opening camera motion',
+      cameraAngle: 'Wide Establishing Shot',
+      cameraMovement: 'Slow Cinematic Push-in',
+      lighting: 'Dramatic Atmospheric Lighting',
+      environment: 'Cinematic Setting',
+      duration: 10,
+      aspectRatio: project.aspectRatio || '16:9',
+      shotsCount: 3,
+      transition: 'Cut to next scene',
+      referenceImageBlobIds: [],
+      generationStatus: 'idle',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await saveScene(newScene);
+
+    await handleSelectEpisode(epId);
+    setSaveNotice(`Episode ${newEpNum} berhasil dibuat!`);
+    setTimeout(() => setSaveNotice(null), 3000);
+  };
 
   // Sync active scene when selectedSceneId changes
   useEffect(() => {
@@ -590,6 +662,180 @@ Format output JSON array:
     }
   };
 
+  // Auto Generate Visuals for all scenes & shots in the active episode
+  const handleAutoGenerateFullEpisode = async () => {
+    if (!project || !selectedEpisodeId) return;
+    const episodeScenes = await getScenesByEpisode(selectedEpisodeId);
+    if (!episodeScenes || episodeScenes.length === 0) {
+      alert('Tidak ada adegan dalam episode ini untuk di-generate.');
+      return;
+    }
+
+    let totalTasks = 0;
+    for (const sc of episodeScenes) {
+      const scShots = sc.shots && sc.shots.length > 0 ? sc.shots : [null];
+      totalTasks += scShots.length;
+    }
+
+    if (
+      !confirm(
+        `Mulai Auto Full Episode Render untuk ${episodeScenes.length} adegan (~${totalTasks} visual shot)? Semua pekerjaan akan dijadwalkan otomatis.`
+      )
+    ) {
+      return;
+    }
+
+    setIsAutoRenderingEpisode(true);
+    setAutoRenderProgress({ current: 0, total: totalTasks, currentSceneTitle: 'Mempersiapkan antrean...' });
+
+    let completedTasks = 0;
+
+    try {
+      for (const sc of episodeScenes) {
+        setAutoRenderProgress({
+          current: completedTasks,
+          total: totalTasks,
+          currentSceneTitle: sc.title,
+        });
+
+        if (sc.shots && sc.shots.length > 0) {
+          for (const shot of sc.shots) {
+            const rawPrompt = shot.imagePrompt || sc.imagePrompt;
+            const finalPrompt = enrichPromptWithCharacterDNA(rawPrompt, sc, characters);
+
+            await queueManager.addJob({
+              projectId: sc.projectId,
+              sceneId: sc.id,
+              taskType: 'image',
+              prompt: finalPrompt,
+              params: {
+                aspectRatio: sc.aspectRatio || '16:9',
+              },
+              onComplete: async (job) => {
+                completedTasks++;
+                setAutoRenderProgress({
+                  current: completedTasks,
+                  total: totalTasks,
+                  currentSceneTitle: `Adegan #${sc.sceneNumber} - Shot #${shot.shotNumber}`,
+                });
+
+                if (job.resultBlobId) {
+                  const freshScenes = await getScenesByEpisode(sc.episodeId);
+                  const targetScene = freshScenes.find((s) => s.id === sc.id);
+                  if (targetScene) {
+                    const updatedShots = (targetScene.shots || []).map((s) =>
+                      s.id === shot.id
+                        ? { ...s, generatedImageBlobId: job.resultBlobId, status: 'completed' as const }
+                        : s
+                    );
+                    const updatedScene: Scene = {
+                      ...targetScene,
+                      shots: updatedShots,
+                      generatedImageBlobId: targetScene.generatedImageBlobId || job.resultBlobId,
+                      generationStatus: 'completed',
+                      updatedAt: Date.now(),
+                    };
+                    await saveScene(updatedScene);
+                    if (targetScene.id === selectedSceneId) {
+                      setActiveScene(updatedScene);
+                      const url = await getMediaBlobUrl(job.resultBlobId);
+                      if (url) {
+                        setShotImageUrls((prev) => ({ ...prev, [shot.id]: url }));
+                      }
+                    }
+                  }
+                }
+              },
+              onError: (err) => {
+                console.error(`Gagal render shot ${shot.shotNumber}:`, err);
+              },
+            });
+          }
+        } else {
+          // Scene without individual shots
+          const finalPrompt = enrichPromptWithCharacterDNA(sc.imagePrompt, sc, characters);
+          await queueManager.addJob({
+            projectId: sc.projectId,
+            sceneId: sc.id,
+            taskType: 'image',
+            prompt: finalPrompt,
+            params: {
+              aspectRatio: sc.aspectRatio || '16:9',
+            },
+            onComplete: async (job) => {
+              completedTasks++;
+              setAutoRenderProgress({
+                current: completedTasks,
+                total: totalTasks,
+                currentSceneTitle: `Adegan #${sc.sceneNumber}`,
+              });
+
+              if (job.resultBlobId) {
+                const freshScenes = await getScenesByEpisode(sc.episodeId);
+                const targetScene = freshScenes.find((s) => s.id === sc.id);
+                if (targetScene) {
+                  const updatedScene: Scene = {
+                    ...targetScene,
+                    generatedImageBlobId: job.resultBlobId,
+                    generationStatus: 'completed',
+                    updatedAt: Date.now(),
+                  };
+                  await saveScene(updatedScene);
+                  if (targetScene.id === selectedSceneId) {
+                    setActiveScene(updatedScene);
+                    const url = await getMediaBlobUrl(job.resultBlobId);
+                    if (url) setSceneImageUrl(url);
+                  }
+                }
+              }
+            },
+            onError: (err) => {
+              console.error(`Gagal render adegan ${sc.sceneNumber}:`, err);
+            },
+          });
+        }
+      }
+
+      setSaveNotice(`Semua ${totalTasks} visual dalam episode berhasil dijadwalkan ke generator!`);
+      setTimeout(() => setSaveNotice(null), 5000);
+    } catch (err: any) {
+      alert(`Terjadi kesalahan saat memulai auto render: ${err.message}`);
+    } finally {
+      setIsAutoRenderingEpisode(false);
+    }
+  };
+
+  const activeEpisode = episodes.find((e) => e.id === selectedEpisodeId) || episodes[0];
+  const currentSceneIndex = scenes.findIndex((s) => s.id === selectedSceneId);
+  const prevScene = currentSceneIndex > 0 ? scenes[currentSceneIndex - 1] : null;
+  const nextScene = currentSceneIndex >= 0 && currentSceneIndex < scenes.length - 1 ? scenes[currentSceneIndex + 1] : null;
+
+  const currentEpisodeIndex = episodes.findIndex((e) => e.id === selectedEpisodeId);
+  const prevEpisode = currentEpisodeIndex > 0 ? episodes[currentEpisodeIndex - 1] : null;
+  const nextEpisode = currentEpisodeIndex >= 0 && currentEpisodeIndex < episodes.length - 1 ? episodes[currentEpisodeIndex + 1] : null;
+
+  const handleGoNextScene = async () => {
+    if (nextScene) {
+      setSelectedSceneId(nextScene.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (nextEpisode) {
+      await handleSelectEpisode(nextEpisode.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      alert('Selamat! Anda telah mencapai akhir seluruh episode dan adegan storyboard.');
+    }
+  };
+
+  const handleGoPrevScene = async () => {
+    if (prevScene) {
+      setSelectedSceneId(prevScene.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (prevEpisode) {
+      await handleSelectEpisode(prevEpisode.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   if (!project) {
     return (
       <div className="py-20 text-center space-y-4">
@@ -611,6 +857,79 @@ Format output JSON array:
 
   return (
     <div className="space-y-6 pb-20">
+      {/* TOP BAR: EPISODE SWITCHER & MASTER CONTROLS */}
+      <div className="bg-[#121424] border border-border/80 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-border/60">
+            <Clapperboard className="w-4 h-4 text-accent-purple" />
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-300">
+              EPISODE
+            </span>
+          </div>
+
+          {/* Episode Pills */}
+          <div className="flex items-center gap-1.5">
+            {episodes.map((ep) => (
+              <button
+                key={ep.id}
+                onClick={() => handleSelectEpisode(ep.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all flex items-center gap-1.5 border ${
+                  ep.id === selectedEpisodeId
+                    ? 'bg-gradient-to-r from-accent-purple to-purple-800 text-white border-purple-500 shadow-md shadow-purple-950/60'
+                    : 'bg-secondary/60 text-gray-400 border-border/60 hover:text-gray-200 hover:border-gray-500'
+                }`}
+              >
+                <span>Ep {ep.episodeNumber}</span>
+                <span className="text-[10px] opacity-75 font-normal truncate max-w-[80px]">
+                  {ep.title.replace(/^Episode \d+[:\s]*/i, '')}
+                </span>
+              </button>
+            ))}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAddNewEpisode}
+              className="h-7 text-xs px-2 py-1 flex items-center gap-1 border-dashed text-gray-400 hover:text-white"
+              title="Tambah Episode Baru"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Episode Baru</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Auto Full Episode Render Button */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleAutoGenerateFullEpisode}
+            disabled={isAutoRenderingEpisode || scenes.length === 0}
+            className="text-xs font-semibold px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 border border-purple-400/40 shadow-lg shadow-purple-950/40"
+            title="Generate seluruh visual adegan & shot di episode ini secara otomatis"
+          >
+            <PlayCircle className={`w-3.5 h-3.5 ${isAutoRenderingEpisode ? 'animate-spin' : ''}`} />
+            <span>{isAutoRenderingEpisode ? 'Rendering Episode...' : 'Auto Full Episode Render'}</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Auto Render Progress Notification Banner */}
+      {autoRenderProgress && (
+        <div className="p-3 bg-purple-950/50 border border-purple-800/80 rounded-xl text-xs text-purple-200 flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
+            <span>
+              Auto Render Episode: <strong>{autoRenderProgress.currentSceneTitle}</strong> ({autoRenderProgress.current}/{autoRenderProgress.total})
+            </span>
+          </div>
+          <span className="font-mono text-purple-300 font-bold">
+            {Math.round((autoRenderProgress.current / Math.max(autoRenderProgress.total, 1)) * 100)}%
+          </span>
+        </div>
+      )}
+
       {/* Top Scene Director Bar (Identical to MasTon / SUTRADARA AI Visual Reference) */}
       <div className="bg-[#101222] border border-border rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-4">
@@ -648,7 +967,7 @@ Format output JSON array:
               </span>
               <span className="text-gray-500">|</span>
               <span className="text-gray-300 truncate max-w-[260px]">
-                Transisi ke scene berikutnya: {activeScene?.transition || 'Cut to next scene'}
+                Transisi: {activeScene?.transition || 'Cut to next scene'}
               </span>
             </div>
           </div>
@@ -656,6 +975,33 @@ Format output JSON array:
 
         {/* Scene Navigation Selector & Controls */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+          {/* Prev / Next Scene Buttons */}
+          <div className="flex items-center gap-1 bg-secondary/80 p-1 rounded-lg border border-border shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleGoPrevScene}
+              disabled={!prevScene && !prevEpisode}
+              className="h-7 w-7 p-0 text-gray-300 hover:text-white"
+              title="Adegan Sebelumnya"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-[11px] font-mono text-gray-400 px-1">
+              {currentSceneIndex + 1}/{scenes.length}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleGoNextScene}
+              disabled={!nextScene && !nextEpisode}
+              className="h-7 w-7 p-0 text-gray-300 hover:text-white"
+              title="Adegan Berikutnya"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+
           {scenes.map((sc) => (
             <button
               key={sc.id}
@@ -1215,6 +1561,65 @@ Format output JSON array:
               </Button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* CONTINUOUS SCENE & EPISODE PROGRESSION BAR */}
+      <div className="bg-[#101222] border border-border/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-400">Kontinuitas Cerita:</span>
+            <Badge variant="purple" size="sm" className="font-mono text-[10px]">
+              {activeEpisode?.title || 'Episode'} &bull; Adegan {activeScene?.sceneNumber || 1} dari {scenes.length}
+            </Badge>
+          </div>
+          <p className="text-xs text-gray-300">
+            {nextScene
+              ? `Lanjutan alur berikutnya: Adegan #${nextScene.sceneNumber} (${nextScene.title})`
+              : nextEpisode
+              ? `Episode ini selesai! Lanjut ke ${nextEpisode.title}`
+              : 'Seluruh adegan dan episode telah selesai disusun.'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          {prevScene && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleGoPrevScene}
+              className="text-xs"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Adegan Sebelumnya (#{prevScene.sceneNumber})
+            </Button>
+          )}
+
+          {nextScene ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleGoNextScene}
+              className="text-xs bg-gradient-to-r from-accent-purple to-purple-700 hover:from-accent-purple/90 hover:to-purple-600 shadow-md shadow-purple-950/50"
+            >
+              <span>Lanjut ke Adegan #{nextScene.sceneNumber}</span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          ) : nextEpisode ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleGoNextScene}
+              className="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-teal-950/50"
+            >
+              <span>Lanjut ke {nextEpisode.title}</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          ) : (
+            <Badge variant="success" size="md" className="font-semibold text-xs py-1.5 px-3">
+              <Check className="w-4 h-4 mr-1" /> Cerita Lengkap Selesai
+            </Badge>
+          )}
         </div>
       </div>
 

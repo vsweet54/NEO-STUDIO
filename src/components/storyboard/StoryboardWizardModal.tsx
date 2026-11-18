@@ -163,11 +163,23 @@ export const StoryboardWizardModal: React.FC<StoryboardWizardModalProps> = ({
 
             await saveProject(newProject);
 
-            // Save Episodes
+            // Save Episodes - ensure all requested episodesCount exist
             const episodeMap = new Map<number, string>();
-            const epList = data.episodes || [{ episodeNumber: 1, title: 'Episode 1', synopsis: '' }];
+            const rawEpList = Array.isArray(data.episodes) && data.episodes.length > 0 ? data.episodes : [];
+            const epList: any[] = [...rawEpList];
+
+            for (let eNum = 1; eNum <= episodesCount; eNum++) {
+              if (!epList.some((e: any) => e.episodeNumber === eNum)) {
+                epList.push({
+                  episodeNumber: eNum,
+                  title: `Episode ${eNum}: Kelanjutan Cerita`,
+                  synopsis: `Kelanjutan cerita episode ${eNum} untuk proyek ${newProject.title}`,
+                });
+              }
+            }
+
             for (const ep of epList) {
-              const epId = 'ep_' + Math.random().toString(36).substring(2, 9) + now;
+              const epId = 'ep_' + Math.random().toString(36).substring(2, 9) + now + '_' + ep.episodeNumber;
               episodeMap.set(ep.episodeNumber, epId);
               await saveEpisode({
                 id: epId,
@@ -208,11 +220,16 @@ export const StoryboardWizardModal: React.FC<StoryboardWizardModalProps> = ({
               await saveCharacter(charRecord);
             }
 
-            // Save Scenes
+            // Save Scenes - distribute accurately across episodes
             for (let i = 0; i < data.scenes.length; i++) {
               const sc = data.scenes[i];
-              const sceneId = 'sc_' + Math.random().toString(36).substring(2, 9) + now;
-              const epId = episodeMap.get(sc.episodeNumber || 1) || Array.from(episodeMap.values())[0];
+              const sceneId = 'sc_' + Math.random().toString(36).substring(2, 9) + now + '_' + i;
+              
+              let targetEpNum = sc.episodeNumber;
+              if (!targetEpNum || !episodeMap.has(targetEpNum)) {
+                targetEpNum = Math.min(Math.floor(i / scenesCount) + 1, episodesCount);
+              }
+              const epId = episodeMap.get(targetEpNum) || Array.from(episodeMap.values())[0];
 
               const charIds = (sc.characterNames || []).map((name: string) => charIdMap.get(name) || '').filter(Boolean);
 

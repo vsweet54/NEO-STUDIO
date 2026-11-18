@@ -55,6 +55,23 @@ export async function getMediaBlobUrl(id: string): Promise<string | null> {
   return url;
 }
 
+export async function getMediaBlobBase64(id: string): Promise<string | null> {
+  if (!id) return null;
+  const record = await getMediaBlob(id);
+  if (!record || !record.data) return null;
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const res = reader.result as string;
+      const base64 = res.split(',')[1] || res;
+      resolve(base64);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(record.data);
+  });
+}
+
 export async function deleteMediaBlob(id: string): Promise<void> {
   if (objectUrlCache.has(id)) {
     URL.revokeObjectURL(objectUrlCache.get(id)!);
